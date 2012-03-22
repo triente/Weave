@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+/*
+Weave (Web-based Analysis and Visualization Environment)
+Copyright (C) 2008-2011 University of Massachusetts Lowell
+
+This file is a part of Weave.
+
+Weave is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License, Version 3,
+as published by the Free Software Foundation.
+
+Weave is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Weave.  If not, see <http://www.gnu.org/licenses/>.
+*/
+-->
+<ui:DraggablePanel xmlns="weave.example.*" xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*"
+				   implements="weave.api.ui.IVisTool">
+	<mx:Canvas id="canvas" width="100%" height="100%" />
+	<mx:Script>
+		<![CDATA[
+			import weave.Weave;
+			import weave.api.WeaveAPI;
+			import weave.api.data.IAttributeColumn;
+			import weave.api.data.IQualifiedKey;
+			import weave.api.getCallbackCollection;
+			import weave.api.newLinkableChild;
+			import weave.api.ui.IVisTool;
+			import weave.compiler.StandardLib;
+			import weave.core.LinkableNumber;
+			import weave.data.AttributeColumns.DynamicColumn;
+			import weave.primitives.ColorRamp;
+			import weave.utils.ColumnUtils;
+			WeaveAPI.registerImplementation(IVisTool, NewScatterPlot);
+			
+			public const xData:DynamicColumn = newLinkableChild(this,DynamicColumn);
+			public const yData:DynamicColumn = newLinkableChild(this,DynamicColumn);
+			public const cData:DynamicColumn = newLinkableChild(this,DynamicColumn);
+			public const colorRamp:ColorRamp = newLinkableChild(this,ColorRamp);
+			//public const marginLeft:LinkableNumber = newLinkableChild(this,LinkableNumber);
+			private const marginLeft:Number = 30;
+			private const marginRight:Number = 10;
+			private const marginBottom:Number = 30;
+			private const marginTop:Number = 10;
+			
+			
+			override protected function childrenCreated():void{
+				super.childrenCreated();
+				getCallbackCollection(this).addImmediateCallback(this, invalidateDisplayList);
+			}
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void{
+				super.updateDisplayList.apply(this,arguments);
+				
+				
+				var keys:Array = ColumnUtils.getAllKeys([xData,yData,cData]);
+				var r:Number = 5;
+				canvas.graphics.clear();
+				
+				canvas.graphics.lineStyle(1,0x000000);
+				canvas.graphics.drawRect(marginLeft,marginTop,
+					canvas.width - marginLeft - marginRight,
+					canvas.height - marginTop - marginBottom
+				);
+				
+				for each(var key:IQualifiedKey in keys)
+				{
+					var x:Number = ColumnUtils.getNorm(xData,key);
+					var y:Number = ColumnUtils.getNorm(yData,key);
+					var c:Number = ColumnUtils.getNorm(cData,key);
+					var cc:IAttributeColumn = (Weave.root.getObject(Weave.DEFAULT_COLOR_COLUMN) as IAttributeColumn);
+					var color:Number = cc.getValueFromKey(key,Number);
+					
+					var xScreen:Number = StandardLib.scale(x,0,1,marginLeft,canvas.width - marginRight);
+					var yScreen:Number = StandardLib.scale(y,1,0,marginTop,canvas.height - marginBottom);
+					
+					canvas.graphics.beginFill(color);
+					canvas.graphics.drawCircle(xScreen,yScreen,r);
+				}
+			}
+		]]>
+	</mx:Script>
+	<ui:ControlPanel>
+		<mx:VBox>
+			<mx:Label text="Example control panel"/>
+		</mx:VBox>
+		<mx:VBox>
+			<mx:Label text="Second tab of example control panel"/>
+		</mx:VBox>
+	</ui:ControlPanel>
+</ui:DraggablePanel>
