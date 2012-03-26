@@ -24,6 +24,8 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 	<mx:Canvas id="canvas" width="100%" height="100%" />
 	<mx:Script>
 		<![CDATA[
+			import mx.controls.Alert;
+			
 			import weave.Weave;
 			import weave.api.WeaveAPI;
 			import weave.api.data.IAttributeColumn;
@@ -37,8 +39,11 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.data.AttributeColumns.DynamicColumn;
 			import weave.data.StatisticsCache;
 			import weave.primitives.ColorRamp;
+			import weave.utils.BitmapText;
+			import weave.utils.BitmapUtils;
 			import weave.utils.ColumnUtils;
 			import weave.utils.EquationColumnLib;
+			import weave.utils.PlotterUtils;
 			WeaveAPI.registerImplementation(IVisTool, NewScatterPlot);
 			
 			public const xData:DynamicColumn = newLinkableChild(this,DynamicColumn);
@@ -46,13 +51,24 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			public const cData:DynamicColumn = newLinkableChild(this,DynamicColumn);
 			public const colorRamp:ColorRamp = newLinkableChild(this,ColorRamp);
 			//public const marginLeft:LinkableNumber = newLinkableChild(this,LinkableNumber);
-			private const marginLeft:Number = 30;
+			private const marginLeft:Number = 25;
 			private const marginRight:Number = 10;
-			private const marginBottom:Number = 30;
+			private const marginBottom:Number = 25;
 			private const marginTop:Number = 10;
 			
-			private const numTicks:Number = 10;
+			private const numTicks:Number = 20;
 			private const tickLength:Number = 10;
+			
+			private const X_AXIS:uint = 0;
+			private const Y_AXIS:uint = 1;
+			
+			private var bitmap:Bitmap = new Bitmap(new BitmapData(500, 500, true));
+			private var bitmapText:BitmapText = new BitmapText();
+			
+			override protected function createChildren():void{
+				super.createChildren();
+				canvas.rawChildren.addChild(bitmap);
+			}
 			
 			override protected function childrenCreated():void{
 				super.childrenCreated();
@@ -64,17 +80,15 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				var keys:Array = ColumnUtils.getAllKeys([xData,yData,cData]);
 				var r:Number = 5;
 				canvas.graphics.clear();
-				
 				canvas.graphics.lineStyle(1,0x000000);
 				canvas.graphics.drawRect(marginLeft,marginTop,
 					canvas.width - marginLeft - marginRight,
 					canvas.height - marginTop - marginBottom
 				);
-				var x:Number,y:Number;
 				for each(var key:IQualifiedKey in keys)
 				{
-					x = ColumnUtils.getNorm(xData,key);
-					y = ColumnUtils.getNorm(yData,key);
+					var x:Number = ColumnUtils.getNorm(xData,key);
+					var y:Number = ColumnUtils.getNorm(yData,key);
 					var c:Number = ColumnUtils.getNorm(cData,key);
 					var cc:IAttributeColumn = (Weave.root.getObject(Weave.DEFAULT_COLOR_COLUMN) as IAttributeColumn);
 					var color:Number = cc.getValueFromKey(key,Number);
@@ -86,17 +100,61 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 					canvas.graphics.drawCircle(xScreen,yScreen,r);
 				}
 				
-				var min:Number = WeaveAPI.StatisticsCache.getMin(xData);
-				var max:Number = WeaveAPI.StatisticsCache.getMax(xData);
-				var niceNumbers:Array = StandardLib.getNiceNumbersInRange(min,max,numTicks);
+				bitmap.bitmapData.fillRect(bitmap.bitmapData.rect,0x00000000);
+				PlotterUtils.setBitmapDataSize(bitmap,canvas.width, canvas.height);
+				drawTickMarks(xData, X_AXIS);
+				drawTickMarks(yData, Y_AXIS);
+			}
+			// axis in {X_AXIS, Y_AXIS}
+			private function drawTickMarks(column:DynamicColumn,axis:uint):void{
+				var min:Number = WeaveAPI.StatisticsCache.getMin(column);
+				var max:Number = WeaveAPI.StatisticsCache.getMax(column);
+				var widthOrHeight:Number = axis == X_AXIS?canvas.width:canvas.height;
+				var n:Number = numTicks * widthOrHeight / 500;
+				var niceNumbers:Array = StandardLib.getNiceNumbersInRange(min,max,n);
+				
+				
 				
 				//draw ticks
+				var x:Number, y:Number;
+				var text:BitmapText = new BitmapText();
+				
 				for each(var tick:Number in niceNumbers){
-					x = StandardLib.scale(tick,min,max,marginLeft,canvas.width - marginRight);
-					y = canvas.height - marginBottom;
-					
-					canvas.graphics.moveTo(x,y - tickLength/2);
-					canvas.graphics.lineTo(x,y + tickLength/2)
+//					if(tick < min || tick > max)
+//						Alert.show(""+tick);
+					// the above code shows a number, meaning niceNumbers
+					// contains values not in the specified range,
+					// therefore it must be checked here:
+					if(tick > min && tick < max){
+						if(axis == X_AXIS){
+							x = StandardLib.scale(tick,min,max,marginLeft,canvas.width - marginRight);
+							y = canvas.height - marginBottom;
+							
+							canvas.graphics.moveTo(x,y - tickLength/2);
+							canvas.graphics.lineTo(x,y + tickLength/2);
+							
+							bitmapText.verticalAlign = BitmapText.VERTICAL_ALIGN_TOP;
+							bitmapText.horizontalAlign = BitmapText.HORIZONTAL_ALIGN_CENTER;
+							
+							y += tickLength/2;
+						}
+						else if(axis == Y_AXIS){
+							x = marginLeft;
+							y = StandardLib.scale(tick,min,max, canvas.height - marginBottom, marginTop);
+							
+							canvas.graphics.moveTo(x - tickLength/2,y);
+							canvas.graphics.lineTo(x + tickLength/2,y);
+							
+							bitmapText.verticalAlign = BitmapText.VERTICAL_ALIGN_MIDDLE;
+							bitmapText.horizontalAlign = BitmapText.HORIZONTAL_ALIGN_RIGHT;
+							
+							x -= tickLength/2;
+						}
+						bitmapText.x = x;
+						bitmapText.y = y;
+						bitmapText.text = ""+tick;
+						bitmapText.draw(bitmap.bitmapData);
+					}
 				}
 			}
 		]]>
