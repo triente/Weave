@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+/*
+    Weave (Web-based Analysis and Visualization Environment)
+    Copyright (C) 2008-2011 University of Massachusetts Lowell
+
+    This file is a part of Weave.
+
+    Weave is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License, Version 3,
+    as published by the Free Software Foundation.
+
+    Weave is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Weave.  If not, see <http://www.gnu.org/licenses/>.
+*/
+-->
+
+<mx:VBox width="100%" height="100%"
+	xmlns="weave.editors.*"
+	xmlns:ui="weave.ui.*"
+	xmlns:mx="http://www.adobe.com/2006/mxml"
+	verticalScrollPolicy="off" horizontalScrollPolicy="off"
+	implements="weave.api.core.ILinkableObject,weave.api.ui.ILinkableObjectEditor"
+	>
+	<ui:DynamicColumnComponent id="sizeEdit" label="size" />
+	<mx:Script>
+		<![CDATA[
+			import weave.api.core.ILinkableObject;
+			import weave.utils.EditorManager;
+			import weave.visualization.plotters.ScatterPlotPlotter;
+			
+			private var _plotter:ScatterPlotPlotter;
+			override protected function childrenCreated():void
+			{
+				super.childrenCreated();
+				sizeEdit.dynamicObject = _plotter.radiusColumn;
+			}
+			
+			public function setTarget(object:ILinkableObject):void
+			{
+				_plotter = object as ScatterPlotPlotter;
+			}
+			public function applyChanges():void
+			{
+				// nothing
+			}
+		]]>
+	</mx:Script>
+</mx:VBox>

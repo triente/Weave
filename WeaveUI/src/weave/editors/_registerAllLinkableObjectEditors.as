@@ -30,6 +30,7 @@ package weave.editors
 	import weave.visualization.plotters.GeometryLabelPlotter;
 	import weave.visualization.plotters.GeometryPlotter;
 	import weave.visualization.plotters.GridLinePlotter;
+	import weave.visualization.plotters.ScatterPlotPlotter;
 	import weave.visualization.plotters.WMSPlotter;
 
 	/**
@@ -53,6 +54,7 @@ package weave.editors
 		EditorManager.registerEditor(WMSPlotter, WMSPlotterEditor);
 		EditorManager.registerEditor(GridLinePlotter, GridLinePlotterEditor);
 		EditorManager.registerEditor(AxisLabelPlotter, AxisLabelPlotterEditor);
+		EditorManager.registerEditor(ScatterPlotPlotter, ScatterPlotPlotterEditor);
 		
 		EditorManager.registerEditor(SessionStateLog, SessionHistorySlider);
 	}

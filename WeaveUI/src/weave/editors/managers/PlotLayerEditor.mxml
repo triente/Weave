@@ -33,6 +33,9 @@
 	implements="weave.api.core.IDisposableObject"
 	allowMultipleSelection="false" xmlns:userControls="weave.ui.userControls.*"
 	>
+	<mx:Metadata>
+		[Deprecated]
+	</mx:Metadata>
 	<mx:Script>
 		<![CDATA[
 			import mx.collections.ArrayCollection;

@@ -61,6 +61,7 @@
 			import weave.visualization.layers.SelectablePlotLayer;
 			import weave.visualization.plotters.GeometryLabelPlotter;
 			import weave.visualization.plotters.GeometryPlotter;
+			import weave.visualization.plotters.ScatterPlotPlotter;
 			import weave.visualization.plotters.SingleImagePlotter;
 			import weave.visualization.plotters.WMSPlotter;
 
@@ -414,6 +415,35 @@
 				}
 			}
 			
+			private function addBubbleLayer():void
+			{
+				var i:int;
+				// get existing layers before they change
+				var layers:Array = visualization.layers.getObjects(SelectablePlotLayer).reverse(); // top to bottom
+				// if a layer is selected in the editor, check that one first.
+				if (layerEditor.selectedItem is SelectablePlotLayer)
+					layers.unshift(layerEditor.selectedItem);
+				// create new label layer
+				var bubbleLayer:SelectablePlotLayer = visualization.layers.requestObject(visualization.layers.generateUniqueName("bubble"), SelectablePlotLayer, false);
+				var plotter:ScatterPlotPlotter = bubbleLayer.getDynamicPlotter().requestLocalObject(ScatterPlotPlotter, true);
+				plotter.enabledSizeBy.value = true;
+				// loop through existing layers to find geometry layer that we can add corresponding bubbles for
+				for (i = 0; i < layers.length; i++)
+				{
+					var geomLayer:SelectablePlotLayer = layers[i];
+					var geomPlotter:GeometryPlotter = geomLayer.getDynamicPlotter().internalObject as GeometryPlotter;
+					if (geomPlotter)
+					{
+						// found a geometry layer
+						plotter.xColumn.requestLocalObjectCopy(geomPlotter.geometryColumn);
+						plotter.yColumn.requestLocalObjectCopy(geomPlotter.geometryColumn);
+						copySessionState(colorColumn, plotter.radiusColumn);
+						// stop when we found geometry layer
+						break;
+					}
+				}
+			}
+			
 			private function addWMSLayer():void
 			{
 				var oldLayerNames:Array = visualization.layers.getNames();
@@ -649,6 +679,7 @@
 				<mx:Button label="Add Base Map" click="addWMSLayer();" toolTip="Add an image layer underneath the geometries"/>
 				<mx:Button label="Add Geometry" click="addGeomLayer();" toolTip="Add a layer of polygons, lines, or points that can be colored according to the data"/>
 				<mx:Button label="Add Labels" click="addLabelLayer();" toolTip="Add labels to the selected geometry layer"/>
+				<mx:Button label="Add Bubble Chart" click="addBubbleLayer();" toolTip="Add bubble chart layer for the selected geometry layer"/>
 			</mx:HBox>
 			
 			<!--<mx:DataGrid dataProvider="{_layerNames.reverse()}">

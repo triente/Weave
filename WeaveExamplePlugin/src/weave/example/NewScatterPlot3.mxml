@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+/*
+    Weave (Web-based Analysis and Visualization Environment)
+    Copyright (C) 2008-2011 University of Massachusetts Lowell
+
+    This file is a part of Weave.
+
+    Weave is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License, Version 3,
+    as published by the Free Software Foundation.
+
+    Weave is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Weave.  If not, see <http://www.gnu.org/licenses/>.
+*/
+-->
+<ui:DraggablePanel xmlns="weave.example.*" xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*"
+				   implements="weave.api.ui.IVisTool">
+
+		<mx:Canvas width="100%" height="100%" id="canvas"/>
+	<mx:Script>
+		<![CDATA[
+			import weave.Weave;
+			import weave.api.WeaveAPI;
+			import weave.api.data.IAttributeColumn;
+			import weave.api.data.IQualifiedKey;
+			import weave.api.getCallbackCollection;
+			import weave.api.newLinkableChild;
+			import weave.api.registerLinkableChild;
+			import weave.api.ui.IVisTool;
+			import weave.compiler.StandardLib;
+			import weave.core.LinkableNumber;
+			import weave.data.AttributeColumns.DynamicColumn;
+			import weave.primitives.Bounds2D;
+			import weave.primitives.ColorRamp;
+			import weave.utils.ColumnUtils;
+			import weave.utils.NumberUtils;
+			WeaveAPI.registerImplementation(IVisTool, NewScatterPlot3);
+			
+			
+			public const bottomPercent:LinkableNumber = registerLinkableChild(this, new LinkableNumber(20));
+			public const leftPercent:LinkableNumber = registerLinkableChild(this, new LinkableNumber(20));
+			public const sizePercent:LinkableNumber = registerLinkableChild(this, new LinkableNumber(0.01));
+			
+			public const xData:DynamicColumn = newLinkableChild(this, DynamicColumn);
+			public const yData:DynamicColumn = newLinkableChild(this, DynamicColumn);
+			public const cData:DynamicColumn = newLinkableChild(this, DynamicColumn);
+			public const colorRamp:ColorRamp = newLinkableChild(this, ColorRamp);
+//			public const radius:LinkableNumber = registerLinkableChild(this, new LinkableNumber(5));
+//			public const weight:LinkableNumber = registerLinkableChild(this, new LinkableNumber(1));
+			
+			override protected function childrenCreated():void
+			{
+				super.childrenCreated();
+				
+				getCallbackCollection(this).addImmediateCallback(this, invalidateDisplayList);
+			}
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void
+			{
+				super.updateDisplayList.apply(this, arguments);
+				
+				var keys:Array = ColumnUtils.getAllKeys([xData,yData,cData]);
+				
+				//var r:Number = radius.value;
+//				var r:Number = 0.05;
+				var r:Number = 5;
+//				var weight:Number = 1 / unscaledWidth;
+				var weight:Number = 1;
+				
+				var xMin:Number = WeaveAPI.StatisticsCache.getMin(xData);
+				var xMax:Number = WeaveAPI.StatisticsCache.getMax(xData);
+				var yMin:Number = WeaveAPI.StatisticsCache.getMin(yData);
+				var yMax:Number = WeaveAPI.StatisticsCache.getMax(yData);
+				
+//				canvas.scaleX = unscaledWidth;
+//				canvas.scaleY = unscaledHeight;
+				
+				canvas.graphics.clear();
+				
+
+				dataBounds.setBounds(xMin, yMin, xMax, yMax);
+				screenBounds.setBounds(0, canvas.height, canvas.width, 0);
+				screenBounds.xMin += (canvas.width * leftPercent.value) / 100;
+				screenBounds.yMin -= (canvas.height * bottomPercent.value) / 100;
+				var point:Point = new Point();
+				
+				//canvas.graphics.endFill();
+				canvas.graphics.lineStyle(1, 0, 1.0, false, LineScaleMode.NORMAL);
+				canvas.graphics.drawRect(
+					screenBounds.getXNumericMin(),
+					screenBounds.getYNumericMin(),
+					screenBounds.getXCoverage(),
+					screenBounds.getYCoverage()
+				);
+				
+				var tempBounds:Bounds2D = new Bounds2D();
+				
+				// left
+				tempBounds.copyFrom(screenBounds);
+				tempBounds.xMax = tempBounds.xMin;
+				drawTicks(dataBounds.yMin, dataBounds.yMax, tempBounds);
+				
+				// right
+				tempBounds.copyFrom(screenBounds);
+				tempBounds.xMin = tempBounds.xMax;
+				drawTicks(dataBounds.yMin, dataBounds.yMax, tempBounds);
+				
+				// top
+				tempBounds.copyFrom(screenBounds);
+				tempBounds.yMax = tempBounds.yMin;
+				drawTicks(dataBounds.xMin, dataBounds.xMax, tempBounds);
+				
+				// bottom
+				tempBounds.copyFrom(screenBounds);
+				tempBounds.yMin = tempBounds.yMax;
+				drawTicks(dataBounds.xMin, dataBounds.xMax, tempBounds);
+				
+				for each (var key:IQualifiedKey in keys)
+				{
+					var x:Number = xData.getValueFromKey(key, Number);
+//					var xNorm:Number = ColumnUtils.getNorm(xData, key);
+//					var xScreen:Number = StandardLib.scale(xNorm, 0, 1, 0, unscaledWidth);
+					
+					var y:Number = yData.getValueFromKey(key, Number);
+					//var yNorm:Number = (y - yMin) / (yMax - yMin);
+//					var yNorm:Number = StandardLib.normalize(y, yMin, yMax);
+//					var yScreen:Number = StandardLib.scale(yNorm, 0, 1, unscaledHeight, 0);
+					
+					point.x = x;
+					point.y = y;
+					dataBounds.projectPointTo(point, screenBounds);
+					
+					var c:Number = cData.getValueFromKey(key, Number);
+					var cNorm:Number = ColumnUtils.getNorm(cData, key);
+					//var color:Number = StandardLib.interpolateColor(cNorm, 0xFF0000, 0x00FF00);
+//					var color:Number = colorRamp.getColorFromNorm(cNorm);
+					var cc:IAttributeColumn = (Weave.root.getObject(Weave.DEFAULT_COLOR_COLUMN) as IAttributeColumn);
+					var color:Number = cc.getValueFromKey(key, Number);
+					
+					canvas.graphics.lineStyle(weight, 0, 0.5, false, LineScaleMode.NORMAL);
+					canvas.graphics.beginFill(color, 1.0);
+					//canvas.graphics.drawCircle(xScreen, yScreen, r);
+//					canvas.graphics.drawCircle(xNorm, yNorm, r);
+					canvas.graphics.drawCircle(point.x, point.y, r);
+					canvas.graphics.endFill();
+				}
+			}
+			private function drawTicks(tickMin:Number, tickMax:Number, screenBounds:Bounds2D):void
+			{
+				var norm:Bounds2D = new Bounds2D(tickMin, tickMin, tickMax, tickMax);
+				var point:Point = new Point();
+				
+				var ticks:Array = StandardLib.getNiceNumbersInRange(tickMin,tickMax,5);
+				for each (var tick:Number in ticks)
+				{
+					point.x = tick;
+					point.y = tick;
+					norm.projectPointTo(point, screenBounds);
+					
+					
+					canvas.graphics.drawCircle(point.x, point.y, Math.min(xPercentSize, yPercentSize)/2);
+					/* canvas.graphics.moveTo(point.x, point.y - yPercentSize.value/2);
+					canvas.graphics.lineTo(point.x, point.y + yPercentSize.value/2); */
+				}
+			}
+			private var dataBounds:Bounds2D = new Bounds2D();
+			private var screenBounds:Bounds2D = new Bounds2D();
+			private function get xPercentSize():Number { return Math.max(5, sizePercent.value * screenBounds.getXCoverage()); }
+			private function get yPercentSize():Number { return Math.max(5, sizePercent.value * screenBounds.getYCoverage()); }
+			
+		]]>
+	</mx:Script>
+	<ui:ControlPanel>
+		<mx:VBox label="First tab">
+			<mx:Label text="Example control panel"/>
+		</mx:VBox>
+		<mx:VBox label="Second tab">
+			<mx:Label text="Second tab of example control panel"/>
+		</mx:VBox>
+	</ui:ControlPanel>
+</ui:DraggablePanel>
