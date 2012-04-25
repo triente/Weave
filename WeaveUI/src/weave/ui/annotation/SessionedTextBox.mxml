@@ -35,7 +35,7 @@
 				 paddingTop="2" verticalScrollPolicy="off">
 
 			<mx:CheckBox id="lockCheckBox" label="Enable window borders and resizing"/>
-			
+			<mx:CheckBox id="moveIconCheckBox" label="Show Move Icon"/>
 			<mx:HBox width="100%" horizontalScrollPolicy="off" paddingBottom="2" paddingLeft="2"
 					 paddingRight="2" paddingTop="2" verticalScrollPolicy="off">
 				
@@ -192,7 +192,15 @@
 				getTextField().alwaysShowSelection = true;
 				textArea.setStyle("focusAlpha", 0);
 				
+				Weave.properties.dashboardMode.addImmediateCallback(this,handleDashboardMode,true);
+				
 				applyStyle();
+				
+			}
+			
+			private function handleDashboardMode():void
+			{
+				lockCheckBox.enabled=!Weave.properties.dashboardMode.value;
 			}
 
 			private function handleTextAreaChange(value:String):void

@@ -40,8 +40,12 @@
 			<mx:ColorPicker id="swatches" 
 							creationComplete="linkBindableProperty(Weave.properties.backgroundColor, event.target, 'selectedColor')"/>
 		</ui:Indent>
-		<mx:CheckBox label="Enable dashboard mode" toolTip="Check this box to show all windows in 'dashboard' mode. Enabling this will hide borders around the tool, hide the bar on the top of the tool, and not allow the tool to be dragged, minimized, maximized, closed, or any other function accessed from the top of the panel."
-					 creationComplete="linkBindableProperty(Weave.properties.dashboardMode, event.target, 'selected');"/>
+		<mx:HBox>
+				<mx:CheckBox id="moveIconCheckBox" label="Enable Move Icon" toolTip="Check this box to enable the move icon image. This will be placed at the top left corner of each panel can be used to move the panels."
+							 creationComplete="linkBindableProperty(Weave.properties.enableMoveIcon, event.target, 'selected');"/>
+				<mx:CheckBox id="dashboardModeCheckBox" label="Enable dashboard mode" toolTip="Check this box to show all windows in 'dashboard' mode. Enabling this will hide borders around the tool, hide the bar on the top of the tool, and not allow the tool to be dragged, minimized, maximized, closed, or any other function accessed from the top of the panel."
+							 creationComplete="linkBindableProperty(Weave.properties.dashboardMode, event.target, 'selected');"/>
+		</mx:HBox>
 		<mx:CheckBox toolTip="Check this box to enable the Attribute Selector."
 					 id="enableToolControls"
 					 label="Enable tool controls"

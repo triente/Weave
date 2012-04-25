@@ -52,6 +52,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import mx.containers.TitleWindow;
 			import mx.controls.Alert;
 			import mx.controls.Button;
+			import mx.controls.Image;
 			import mx.controls.Menu;
 			import mx.core.Application;
 			import mx.core.BitmapAsset;
@@ -65,11 +66,14 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import mx.managers.PopUpManager;
 			
 			import weave.Weave;
+			import weave.WeaveProperties;
 			import weave.api.WeaveAPI;
 			import weave.api.core.ILinkableHashMap;
 			import weave.api.core.ILinkableObject;
 			import weave.api.getCallbackCollection;
 			import weave.api.getLinkableOwner;
+			import weave.api.linkBindableProperty;
+			import weave.api.linkSessionState;
 			import weave.api.newLinkableChild;
 			import weave.api.registerDisposableChild;
 			import weave.api.registerLinkableChild;
@@ -81,6 +85,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.core.LinkableString;
 			import weave.primitives.ImageFactory;
 			import weave.ui.controlBars.VisTaskbar;
+			import weave.utils.CustomCursorManager;
 			import weave.utils.NumberUtils;
 			
 			override protected function childrenCreated():void
@@ -187,6 +192,12 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				Weave.properties.dashboardMode.addGroupedCallback(this, panelNeedsUpdate);
 				Weave.properties.enableToolControls.addGroupedCallback(this, panelNeedsUpdate, true);
 				getCallbackCollection(Weave.root).addGroupedCallback(this, evaluatePanelTitle);
+				
+				Weave.properties.enableMoveIcon.addGroupedCallback(this,updateMoveIcon,true);
+				
+				_moveImage.source = moveIcon;
+				_moveImage.toolTip = "Keep the mouse button pressed on this image and drag to move the panel.";
+				_moveImage.alpha = 0.3;
 			}
 			
 			/**
@@ -198,6 +209,10 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				// nothing here, just a placeholder
 			}
 			
+			[Embed(source="/weave/resources/images/panMode.png")]
+			private var moveIcon:Class; 
+			
+			private var _moveImage:Image = new Image();
 			override protected function createChildren():void
 			{
 				super.createChildren();
@@ -218,6 +233,12 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				setupControlButton(minimizeButton, _minimizeIcon, handleMinimizeButtonClick, "Click here to minimize this component.");
 				setupControlButton(maximizeButton, _maximizeIcon, toggleMaximized, "Click here to maximize or restore this component.");
 				setupControlButton(closePanelButton, null, handleCloseButtonClick, "Click here to close this component.");
+				
+				_moveImage.addEventListener(MouseEvent.ROLL_OVER,handleMouseOverMoveImage);
+				_moveImage.addEventListener(MouseEvent.ROLL_OUT,handleMouseOutMoveImage);
+				_moveImage.addEventListener(MouseEvent.MOUSE_DOWN,handleMouseDownMoveImage);
+				_moveImage.addEventListener(MouseEvent.MOUSE_UP,handleMouseUpMoveImage);
+				
 				
 				closePanelButton.label = "X";
 				closePanelButton.setStyle("textRollOverColor", 0xFFFFFF);
@@ -258,12 +279,31 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				panelNeedsUpdate();
 			}
 			
+			
 			private function handleCreationComplete():void
 			{
 				//_dragCanvas.percentWidth = 100;
 				//_dragCanvas.percentHeight = 100;
 				rawChildren.addChild(_dragCanvas);
 			}
+			
+			private function updateMoveIcon():void
+			{
+				//the moveImage will be enabled if the enableMoveIcon is enabled and the panel is moveable and headerHeight is zerp.
+				var headerHeight:Number = this.getStyle("headerHeight");
+				_moveImage.enabled = Weave.properties.enableMoveIcon.value && draggable.value && Weave.properties.dashboardMode.value && (headerHeight == 0 || isNaN(headerHeight) );
+				if(_moveImage.enabled )
+				{
+					addChild(_moveImage);
+					_moveImage.includeInLayout = false;
+					_moveImage.move(0,0);
+				}
+				else{
+					if(contains(_moveImage))
+						removeChild(_moveImage);
+				}
+			}
+			
 			
 			/**
 			 * Override this function to provide a default panel title when the panelTitle session state is undefined.
@@ -465,6 +505,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				var enableRollOverBorders:Boolean = showRollOverBorders && _mouseRolledOver && mouseY < forceBorderMargin;
 				// setting forceEnableBorders may trigger panelNeedsUpdate()
 				forceEnableBorders.value = enableBordersFlag || enableRollOverBorders;
+				updateMoveIcon();
 			}
 			
 			private function panelNeedsUpdate():void
@@ -476,7 +517,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				setStyle('highlightAlphas', enableBorders.value ? undefined : [0,0]);
 				
 				updateForceEnableBorders();
-				_resizeable = (!Weave.properties.dashboardMode.value && resizeable.value) || forceEnableBorders.value || showRollOverBorders;
+//				_resizeable = (!Weave.properties.dashboardMode.value && resizeable.value) || forceEnableBorders.value;
 				
 				if (!maximizable.value)
 					maximized.value = false;
@@ -490,6 +531,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				invalidateSize();
 				invalidateDisplayList();
 				updateBorders();
+				updateMoveIcon();
 			}
 			
 			override public function move(x:Number, y:Number):void
@@ -737,6 +779,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				else
 					pinButton.setStyle("fillColors",[_titleBarButtonBackgroundColor, _titleBarButtonBackgroundColor] );	
 				updatePinnedPanelOrder();
+				updateMoveIcon();
 			}
 			
 			private function handlePinnedToBackChange():void
@@ -814,7 +857,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			private var _resizing:Boolean = false;
 			private var _dragging:Boolean = false;
 			
-			private var _resizeable:Boolean = false; // used internally to remember whether or not the panel is actually resizable
+			private var _resizeable:Boolean = true; // used internally to remember whether or not the panel is actually resizable
 			
 			private var _rightSideBeforeLeftResize:int = 0;
 			private var _bottomSideBeforeTopResize:int = 0;
@@ -1047,6 +1090,43 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 					_resizing = false;
 				}
 			}
+			
+			private function handleMouseOverMoveImage(event:MouseEvent):void
+			{
+				_moveImage.alpha = 1.0;
+			}
+			
+			private function handleMouseOutMoveImage(event:MouseEvent):void
+			{
+				if(!_dragging)
+					_moveImage.alpha = 0.3;
+			}
+			
+			private var _initialMovedImageMouseDownPoint:Point;
+			private function handleMouseDownMoveImage(event:MouseEvent):void
+			{
+				_initialTitleBarMouseDownPoint = globalToLocal(new Point(stage.mouseX, stage.mouseY));
+				_moveImage.addEventListener(MouseEvent.MOUSE_MOVE,handleMouseMoveMoveImage);				
+			}
+			
+			private function handleMouseUpMoveImage(event:MouseEvent):void
+			{
+				_dragging = false;
+				_moveImage.alpha = 0.3;
+				trace("MOUSE UP");
+				_moveImage.removeEventListener(MouseEvent.MOUSE_MOVE,handleMouseMoveMoveImage);
+			}
+			
+			private function handleMouseMoveMoveImage(event:MouseEvent):void
+			{
+				if(event.stageX> parent.width || event.stageX < 0 || event.stageY > parent.height || event.stageY <0)
+					handleMouseUpMoveImage(event);
+				
+				_dragging = true;
+				handleStageMouseMove(event);
+			}
+			
+			
 			private function handleStageMouseUp(event:MouseEvent):void
 			{
 				if (!draggable.value && !_resizeable)
@@ -1059,6 +1139,9 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				_rightSideResize = false;
 				_topSideResize = false;
 				_bottomResize = false;
+				
+				_moveImage.alpha = 0.3;
+				_moveImage.removeEventListener(MouseEvent.MOUSE_MOVE,handleMouseMoveMoveImage);
 			}
 			private function handleStageMouseMove(event:MouseEvent):void
 			{

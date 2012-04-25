@@ -603,7 +603,8 @@ package weave
 				this.addChildAt(historySlider, this.getChildIndex(visDesktop));
 			}
 			
-			DraggablePanel.showRollOverBorders = adminService || getFlashVarEditable();
+//			DraggablePanel.showRollOverBorders = adminService || getFlashVarEditable();
+//			DraggablePanel.showRollOverBorders = false;
 			if (Weave.properties.enableMenuBar.value || adminService || getFlashVarEditable())
 			{
 				if (!_weaveMenu)
