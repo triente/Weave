@@ -87,17 +87,6 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				
 			}
 			
-			override protected function childrenCreated():void
-			{
-				super.childrenCreated();
-				
-				cRampEditor.colorRamp = plotter.binColors;
-				handleBinColRadioButtonChange();
-				xColumnComponent.dynamicObject = plotter.xColumn;
-				yColumnComponent.dynamicObject = plotter.yColumn;
-				colorColumnComponent.dynamicObject = Weave.defaultColorDataColumn.internalDynamicColumn;
-			}
-			
 			override public function getSelectableAttributeNames():Array
 			{
 				return ["X","Y"];
@@ -122,42 +111,6 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 					}
 				}
 			}
-			
-			private var _prevBinnedColumn:BinnedColumn = null;
-			private function handleBinColRadioButtonChange():void
-			{
-				var selectedCol:String = binColGroup.selectedValue as String;
-				
-				//it is null when the tool loads for the first time and so it defaults to the x column
-				if (selectedCol == "xBinCol" || selectedCol == null)
-				{
-					xBinColRadioButton.setStyle('fontWeight','bold');
-					yBinColRadioButton.setStyle('fontWeight','normal');
-					
-					if (_prevBinnedColumn)
-						unlinkSessionState(_prevBinnedColumn, binEditor.binnedColumn);
-					
-					if (plotter.xBinnedColumn)
-						linkSessionState(plotter.xBinnedColumn, binEditor.binnedColumn);
-					
-					_prevBinnedColumn = plotter.xBinnedColumn;
-				}
-				else if (selectedCol == "yBinCol")
-				{
-					yBinColRadioButton.setStyle('fontWeight','bold');
-					xBinColRadioButton.setStyle('fontWeight','normal');
-					
-					if (_prevBinnedColumn)
-						unlinkSessionState(_prevBinnedColumn, binEditor.binnedColumn);
-					
-					if (plotter.yBinnedColumn)
-						linkSessionState(plotter.yBinnedColumn, binEditor.binnedColumn);
-					
-					_prevBinnedColumn = plotter.yBinnedColumn;
-				}
-			}
-			
-			
 			
 			override protected function get defaultPanelTitle():String
 			{
@@ -191,31 +144,5 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 		]]>
 	</mx:Script>
 	
-	<ui:ControlPanel>
-		<mx:VBox label="Visualization Controls">
-			<mx:CheckBox id="probeColumnsCheckBox" label="Include tool attributes in probe tooltip"
-						 toolTip="Checking this box makes the tool's binned attribute visible in this tool's probe tooltip"
-						 creationComplete="linkBindableProperty(includeToolAttributesInProbe,event.target,'selected')"/>
-			<ui:DynamicColumnComponent visTool="{this}" id="xColumnComponent" label="X Column"/>
-			<ui:DynamicColumnComponent visTool="{this}" id="yColumnComponent" label="Y Column"/>
-		</mx:VBox>
-		<mx:VBox label="Binning Controls">
-				<mx:HBox>
-					<mx:Label text="Select Column:"/>
-					<mx:RadioButtonGroup id="binColGroup" change="handleBinColRadioButtonChange()"/>
-					<mx:RadioButton groupName="binColGroup" label="X Column" value="xBinCol" id="xBinColRadioButton" selected="true"/>
-					<mx:RadioButton groupName="binColGroup" label="Y Column" value="yBinCol" id="yBinColRadioButton"/>
-				</mx:HBox>
-			<ui:BinningDefinitionEditor id="binEditor"/>
-		</mx:VBox>
-		<mx:VBox label="Advanced">
-			<mx:CheckBox id="showAverageColorData" label="Color by average data value instead of record count"
-						 creationComplete="linkBindableProperty(plotter.showAverageColorData, event.currentTarget, 'selected');"/>
-			<mx:HBox width="100%" verticalAlign="middle" enabled="{showAverageColorData.selected}">
-				<ui:DynamicColumnComponent id="colorColumnComponent" visTool="{this}" label="Color data"/>
-				<mx:Button label="Edit colors..." click="DraggablePanel.openStaticInstance(ColorController);"/>
-			</mx:HBox>
-			<ui:ColorRampEditor id="cRampEditor" enabled="{!showAverageColorData.selected}"/>
-		</mx:VBox>
-	</ui:ControlPanel>
+
 </SimpleVisTool>

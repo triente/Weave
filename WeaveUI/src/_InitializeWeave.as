@@ -58,6 +58,7 @@ package
 	import weave.editors.GeometryLabelPlotterEditor;
 	import weave.editors.GeometryPlotterEditor;
 	import weave.editors.GridLinePlotterEditor;
+	import weave.editors.Histogram2DEditor;
 	import weave.editors.SessionHistorySlider;
 	import weave.editors.WFSDataSourceEditor;
 	import weave.editors.WMSPlotterEditor;
@@ -72,6 +73,7 @@ package
 	import weave.visualization.plotters.GeometryPlotter;
 	import weave.visualization.plotters.GridLinePlotter;
 	import weave.visualization.plotters.WMSPlotter;
+	import weave.visualization.tools.Histogram2DTool;
 
 	/**
 	 * Referencing this class will register WeaveAPI singleton implementations.
@@ -118,6 +120,8 @@ package
 		EditorManager.registerEditor(ColorRamp, ColorRampEditor);
 		
 		EditorManager.registerEditor(SessionStateLog, SessionHistorySlider);
+		
+		EditorManager.registerEditor(Histogram2DTool,Histogram2DEditor);
 		
 		/**
 		 * Include these packages in WeaveXMLDecoder so they will not need to be specified in the XML session state.
