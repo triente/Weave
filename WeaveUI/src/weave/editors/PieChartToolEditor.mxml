@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+/*
+    Weave (Web-based Analysis and Visualization Environment)
+    Copyright (C) 2008-2011 University of Massachusetts Lowell
+
+    This file is a part of Weave.
+
+    Weave is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License, Version 3,
+    as published by the Free Software Foundation.
+
+    Weave is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Weave.  If not, see <http://www.gnu.org/licenses/>.
+*/
+-->
+<mx:TabNavigator xmlns="weave.example.*" xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*" 
+				 implements="weave.api.ui.ILinkableObjectEditor">
+	<mx:Script>
+		<![CDATA[
+			import weave.api.core.ILinkableObject;
+			import weave.api.linkBindableProperty;
+			import weave.api.registerLinkableChild;
+			import weave.core.LinkableBoolean;
+			import weave.visualization.tools.PieChartTool;
+		
+		[Bindable] private var _target:PieChartTool;
+		
+		public function setTarget(object:ILinkableObject):void
+		{
+			
+			_target = object as PieChartTool;
+			
+			
+		}
+		
+		public function applyChanges():void
+		{
+		
+		}
+			
+		override protected function childrenCreated():void
+		{
+		super.childrenCreated();
+	
+		
+		wedgeSize.dynamicObject = _target._plotter.data;
+		wedgeColor.dynamicObject = _target.colorColumn;
+		labelColumInput.dynamicObject = _target._plotter.label;
+		linkBindableProperty(_target._plotter.labelAngleRatio, labelAngleSlider, 'value');
+		}
+		
+	
+			
+		]]>
+	</mx:Script>
+	<mx:VBox id="attributesPanel" label="Attributes for Pie Chart">
+		<mx:CheckBox id="probeColumnsCheckBox" label="Include tool attributes in probe tooltip"
+					 toolTip="Checking this box makes all of the following attributes visible in this tool's probe tooltip"
+					 creationComplete="linkBindableProperty(_target.includeToolAttributesInProbe,event.target,'selected')"/>
+		<ui:DynamicColumnComponent visTool="{_target}" id="wedgeSize" label="Wedge size"/>
+		<ui:DynamicColumnComponent visTool="{_target}" id="wedgeColor" label="Wedge color" />
+		<ui:DynamicColumnComponent visTool="{_target}" id="labelColumInput" label="Label Column" />
+		<mx:HBox width="100%">
+			<mx:Label text="Label angle" fontWeight="bold"/>
+			<mx:HSlider id="labelAngleSlider"
+						snapInterval="0.25" minimum="0" maximum="1" liveDragging="true" tickInterval="0.25"
+						dataTipFormatFunction="{function(v:Number):String { return String(Math.round(100*v))+'%' }}"
+						/>
+		</mx:HBox>
+	</mx:VBox>
+</mx:TabNavigator>
