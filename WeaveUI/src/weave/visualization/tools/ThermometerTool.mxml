@@ -107,20 +107,5 @@
 
 		]]>
 	</mx:Script>
-	<ui:ControlPanel>
-			<mx:Panel id="attributesPanel" 
-					  label="Attributes for Thermometer" 
-					  headerHeight="2"
-					  borderColor="0x000000" 
-					  backgroundColor="0xCCCCCC" 
-					  backgroundAlpha="0.0" 
-					  borderThickness="0.0" 
-					  height="100%" 
-					  width="100%" 
-					  borderAlpha="0.2" 
-					  borderStyle="none">
-				<ui:DynamicColumnComponent visTool="{this}" label="Meter column:" creationComplete="(event.target as DynamicColumnComponent).dynamicObject = _plotter.meterColumn"/>
-				
-			</mx:Panel>
-	</ui:ControlPanel>
+
 </SimpleVisTool>

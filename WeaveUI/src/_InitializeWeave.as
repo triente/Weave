@@ -62,6 +62,7 @@ package
 	import weave.editors.GridLinePlotterEditor;
 	import weave.editors.PieChartToolEditor;
 	import weave.editors.SessionHistorySlider;
+	import weave.editors.ThermometerToolEditor;
 	import weave.editors.WFSDataSourceEditor;
 	import weave.editors.WMSPlotterEditor;
 	import weave.editors.WeaveDataSourceEditor;
@@ -77,6 +78,7 @@ package
 	import weave.visualization.plotters.PieChartPlotter;
 	import weave.visualization.plotters.WMSPlotter;
 	import weave.visualization.tools.PieChartTool;
+	import weave.visualization.tools.ThermometerTool;
 
 	/**
 	 * Referencing this class will register WeaveAPI singleton implementations.
@@ -119,7 +121,8 @@ package
 		EditorManager.registerEditor(WMSPlotter, WMSPlotterEditor);
 		EditorManager.registerEditor(GridLinePlotter, GridLinePlotterEditor);
 		EditorManager.registerEditor(AxisLabelPlotter, AxisLabelPlotterEditor);
-		EditorManager.registerEditor(PieChartTool, PieChartToolEditor)
+		EditorManager.registerEditor(PieChartTool, PieChartToolEditor);
+		EditorManager.registerEditor(ThermometerTool, ThermometerToolEditor);
 		
 		EditorManager.registerEditor(ColorRamp, ColorRampEditor);
 		
