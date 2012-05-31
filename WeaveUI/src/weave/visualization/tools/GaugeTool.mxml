@@ -45,7 +45,7 @@
 			override protected function childrenCreated():void
 			{
 				super.childrenCreated();
-				cRampEditor.colorRamp = _plotter.colorRamp;
+			//	cRampEditor.colorRamp = _plotter.colorRamp;
 				
 				visualization.marginBottomNumber.addGroupedCallback(this, handleMarginChange);
 			}
@@ -73,7 +73,7 @@
 				
 				getCallbackCollection(LinkableTextFormat.defaultTextFormat).addGroupedCallback(this, updateMarginLabel, true);
 				
-				visualization.marginBottom.value    = DEFAULT_MARGIN_BOTTOM.toString();
+		//		visualization.marginBottom.value    = DEFAULT_MARGIN_BOTTOM.toString();
 			}
 			
 			override public function getSelectableAttributeNames():Array
@@ -119,10 +119,9 @@
 				LinkableTextFormat.defaultTextFormat.copyToStyle(marginLabel);
 			}
 			
-			private static const DEFAULT_MARGIN_BOTTOM:int = 35;
-			private function handleMarginChange():void
+		private function handleMarginChange():void
 			{
-				marginLabelCheckBox.selected = visualization.marginBottomNumber.value != 0;
+			
 				marginLabel.height = visualization.marginBottomNumber.value;
 			}
 			
@@ -140,13 +139,4 @@
 				 bottom="0"
 				 textAlign="center"
 				 toolTip="{marginLabelText} &#13;&#09;Click here to select a different attribute."/>
-	<ui:ControlPanel>
-		<mx:VBox id="attributesPanel" label="Attributes for Gauge" >
-			<ui:DynamicColumnComponent visTool="{this}" label="Gauge column:" creationComplete="(event.target as DynamicColumnComponent).dynamicObject = _plotter.meterColumn"/>
-		</mx:VBox>
-		<mx:VBox id="advControlsPanel" label="Advanced">
-			<mx:CheckBox id="marginLabelCheckBox" label="Show attribute name" change="visualization.marginBottomNumber.value = marginLabelCheckBox.selected ? DEFAULT_MARGIN_BOTTOM : 0;" toolTip="Click to hide the title."/>
-			<ui:ColorRampEditor id="cRampEditor"/>
-		</mx:VBox>
-	</ui:ControlPanel>
 </SimpleVisTool>

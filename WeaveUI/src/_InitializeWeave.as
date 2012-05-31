@@ -57,6 +57,7 @@ package
 	import weave.editors.CSVDataSourceEditor;
 	import weave.editors.DBFDataSourceEditor;
 	import weave.editors.DynamicColumnEditor;
+	import weave.editors.GaugeToolEditor;
 	import weave.editors.GeometryLabelPlotterEditor;
 	import weave.editors.GeometryPlotterEditor;
 	import weave.editors.GridLinePlotterEditor;
@@ -77,6 +78,7 @@ package
 	import weave.visualization.plotters.GridLinePlotter;
 	import weave.visualization.plotters.PieChartPlotter;
 	import weave.visualization.plotters.WMSPlotter;
+	import weave.visualization.tools.GaugeTool;
 	import weave.visualization.tools.PieChartTool;
 	import weave.visualization.tools.ThermometerTool;
 
@@ -123,6 +125,7 @@ package
 		EditorManager.registerEditor(AxisLabelPlotter, AxisLabelPlotterEditor);
 		EditorManager.registerEditor(PieChartTool, PieChartToolEditor);
 		EditorManager.registerEditor(ThermometerTool, ThermometerToolEditor);
+		EditorManager.registerEditor(GaugeTool, GaugeToolEditor);
 		
 		EditorManager.registerEditor(ColorRamp, ColorRampEditor);
 		
