@@ -681,13 +681,14 @@ package weave
 							function():void
 							{
 								WizardPanel.createWizard(_this, new NewUserWizard());
-							}
-						)
+							}, 
+							null,
+							function():Boolean { return Weave.properties.enableLoadMyData.value})
 					);
 				}
 				
-				if (Weave.properties.showAttributeSelector)
-					_weaveMenu.addMenuItemToMenu(_dataMenu, new WeaveMenuItem("Browse data", AttributeSelectorPanel.openDefaultSelector));
+			//	if (Weave.properties.showAttributeSelector)
+				//	_weaveMenu.addMenuItemToMenu(_dataMenu, new WeaveMenuItem("Browse data", AttributeSelectorPanel.openDefaultSelector));
 				
 				_weaveMenu.addMenuItemToMenu(_dataMenu,
 					new WeaveMenuItem("Refresh all data source hierarchies",
@@ -702,10 +703,12 @@ package weave
 				);
 				
 				if(Weave.properties.enableAddDataSource.value)
-					_weaveMenu.addMenuItemToMenu(_dataMenu, new WeaveMenuItem("Add New Datasource", AddDataSourcePanel.showAsPopup));
+					_weaveMenu.addMenuItemToMenu(_dataMenu, new WeaveMenuItem("Add New Datasource", AddDataSourcePanel.showAsPopup, null,
+						function():Boolean { return Weave.properties.enableAddNewDatasource.value}));
 				
 				if(Weave.properties.enableEditDataSource.value)
-					_weaveMenu.addMenuItemToMenu(_dataMenu, new WeaveMenuItem("Edit Datasources", EditDataSourcePanel.showAsPopup));
+					_weaveMenu.addMenuItemToMenu(_dataMenu, new WeaveMenuItem("Edit Datasources", EditDataSourcePanel.showAsPopup, null,
+						function():Boolean { return Weave.properties.enableEditDatasources.value}));
 			}
 			
 			
