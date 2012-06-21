@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+/*
+    Weave (Web-based Analysis and Visualization Environment)
+    Copyright (C) 2008-2011 University of Massachusetts Lowell
+
+    This file is a part of Weave.
+
+    Weave is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License, Version 3,
+    as published by the Free Software Foundation.
+
+    Weave is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with Weave.  If not, see <http://www.gnu.org/licenses/>.
+*/
+-->
+<mx:TabNavigator xmlns="weave.example.*" xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:ui="weave.ui.*" 
+				 implements="weave.api.ui.ILinkableObjectEditor">
+	<mx:Script>
+		<![CDATA[
+			import weave.api.core.ILinkableObject;
+			import weave.api.linkBindableProperty;
+			import weave.api.registerLinkableChild;
+			import weave.core.LinkableBoolean;
+			import weave.visualization.tools.GaugeTool;
+			
+		
+		[Bindable] private var _target:GaugeTool;
+		
+		public function setTarget(object:ILinkableObject):void
+		{
+			
+			_target = object as GaugeTool;
+			
+			
+		}
+		
+		public function applyChanges():void
+		{
+		
+		}
+			
+		override protected function childrenCreated():void
+		{
+		super.childrenCreated();
+
+		cRampEditor.colorRamp = _target._plotter.colorRamp;
+		
+		_target.visualization.marginBottom.value = DEFAULT_MARGIN_BOTTOM.toString();
+
+		}
+		
+			private static const DEFAULT_MARGIN_BOTTOM:int = 35;
+			
+		]]>
+	</mx:Script>
+	<mx:VBox id="attributesPanel" label="Attributes for Gauge" >
+		<ui:DynamicColumnComponent visTool="{_target}" label="Gauge column:" creationComplete="(event.target as DynamicColumnComponent).dynamicObject = _target._plotter.meterColumn"/>
+	</mx:VBox>
+	<mx:VBox id="advControlsPanel" label="Advanced">
+	
+		<ui:ColorRampEditor id="cRampEditor"/>
+	</mx:VBox>
+</mx:TabNavigator>
