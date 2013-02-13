@@ -152,13 +152,24 @@
 				},
 				'application': WeaveAPI.topLevelApplication,
 				'visApp': getVisApp(),
-				'print': ObjectUtil.toString as Function,
+				'toString': ObjectUtil.toString as Function,
 				'getObject': getObject,
 				'clear': consoleClear,
 				'watch': consoleWatch,
 				'unwatch': consoleUnwatch,
-				'trace': consoleTrace
+				'trace': consoleTrace,
+				'$': debugHelper,
+				'_': {}
 			};
+			
+			private function debugHelper(arg:* = null):*
+			{
+				var type:String = typeof(arg);
+				if (arg == null || type != 'object' && type != 'function')
+					return debugLookup(arg);
+				return debugId(arg);
+			}
+			
 			private function getVisApp():Object
 			{
 				var app:Object = WeaveAPI.topLevelApplication;
@@ -194,7 +205,10 @@
 					{
 						if (typeof result == 'object' && !(result is DisplayObject))
 						{
-							result = ObjectUtil.toString(result);
+							if (result != null && (result as Object).hasOwnProperty('toString') && (result as Object).toString is Function)
+								result = result.toString();
+							else
+								result = ObjectUtil.toString(result);
 							var max:int = 1024;
 							var text:String = result;
 							if (text.length > max)
