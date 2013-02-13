@@ -33,6 +33,7 @@ package
 	import weave.editors.DynamicColumnEditor;
 	import weave.editors.GeometryLabelPlotterEditor;
 	import weave.editors.GeometryPlotterEditor;
+	import weave.editors.GeometryRelationPlotterEditor;
 	import weave.editors.GridLinePlotterEditor;
 	import weave.editors.ImageGlyphPlotterEditor;
 	import weave.editors.SessionHistorySlider;
@@ -49,6 +50,7 @@ package
 	import weave.visualization.plotters.AxisLabelPlotter;
 	import weave.visualization.plotters.GeometryLabelPlotter;
 	import weave.visualization.plotters.GeometryPlotter;
+	import weave.visualization.plotters.GeometryRelationPlotter;
 	import weave.visualization.plotters.GridLinePlotter;
 	import weave.visualization.plotters.ImageGlyphPlotter;
 	import weave.visualization.plotters.WMSPlotter;
@@ -99,6 +101,7 @@ package
 		EditorManager.registerEditor(CSVDataSource, CSVDataSourceEditor);
 		
 		EditorManager.registerEditor(GeometryLabelPlotter, GeometryLabelPlotterEditor);
+		EditorManager.registerEditor(GeometryRelationPlotter, GeometryRelationPlotterEditor);
 		EditorManager.registerEditor(GeometryPlotter, GeometryPlotterEditor);
 		EditorManager.registerEditor(WMSPlotter, WMSPlotterEditor);
 		EditorManager.registerEditor(GridLinePlotter, GridLinePlotterEditor);
