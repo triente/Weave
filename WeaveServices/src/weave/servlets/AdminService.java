@@ -127,7 +127,7 @@ public class AdminService
 		{
 			try
 			{
-				PrintStream ps = new PrintStream(getServletRequestInfo().response.getOutputStream());
+				PrintStream ps = new PrintStream(getServletOutputStream());
 				ProgressPrinter pp = new ProgressPrinter(ps);
 				WeaveConfig.initializeAdminService(pp.getProgressManager());
 			}
@@ -171,7 +171,7 @@ public class AdminService
 	{
 		ConnectionConfig connConfig = getConnectionConfig();
 		ConnectionInfo info = connConfig.getConnectionInfo(user);
-		if (info == null || !password.equals(info.pass))
+		if (info == null || password == null || !password.equals(info.pass))
 		{
 			System.out.println(String.format("authenticate failed, name=\"%s\" pass=\"%s\"", user, password));
 			throw new RemoteException("Incorrect username or password.");
@@ -181,14 +181,18 @@ public class AdminService
 	
     private void tryModify(String user, String pass, int entityId) throws RemoteException
     {
-        // superuser can modify anything
-        if (!getConnectionInfo(user, pass).is_superuser)
-        {
-        	DataEntity entity = getDataConfig().getEntity(entityId);
+        if (getConnectionInfo(user, pass).is_superuser)
+        	return; // superuser can modify anything
+        
+    	DataEntity entity = getDataConfig().getEntity(entityId);
+    	
+    	// permissions only supported on data tables and columns
+    	if (entity.type == DataEntity.TYPE_DATATABLE || entity.type == DataEntity.TYPE_COLUMN)
+    	{
 	        String owner = entity.privateMetadata.get(PrivateMetadata.CONNECTION);
 	        if (!user.equals(owner))
 	        	throw new RemoteException(String.format("User \"%s\" cannot modify entity %s.", user, entityId));
-        }
+    	}
     }
 	
 	//////////////////////////////
@@ -585,6 +589,9 @@ public class AdminService
 
 	public void removeParentChildRelationship(String user, String password, int parentId, int childId) throws RemoteException
 	{
+		if (parentId == DataConfig.NULL)
+			throw new RemoteException("removeParentChildRelationship() called with parentId=" + DataConfig.NULL);
+		
 		tryModify(user, password, parentId);
 		getDataConfig().removeChild(parentId, childId);
 	}
@@ -703,9 +710,11 @@ public class AdminService
 	 * @param content The file content.
 	 * @param append Set to true to append to an existing file.
 	 */
-	public void uploadFile(String fileName, InputStream content, boolean append)
+	public void uploadFile(String user, String password, String fileName, InputStream content, boolean append)
 		throws RemoteException
 	{
+		authenticate(user, password);
+		
 		// make sure the upload folder exists
 		(new File(getUploadPath())).mkdirs();
 
@@ -1080,45 +1089,26 @@ public class AdminService
 
 	private boolean valueIsInt(String value)
 	{
-		boolean retVal = true;
 		try
 		{
-			Integer.parseInt(value);
+			return Integer.toString(Integer.parseInt(value)).equals(value);
 		}
 		catch (Exception e)
 		{
-			retVal = false;
+			return false;
 		}
-		return retVal;
 	}
 
 	private boolean valueIsDouble(String value)
 	{
-		boolean retVal = true;
 		try
 		{
-			Double.parseDouble(value);
+			return Double.toString(Double.parseDouble(value)).equals(value);
 		}
 		catch (Exception e)
 		{
-			retVal = false;
+			return false;
 		}
-		return retVal;
-	}
-
-	private boolean valueHasLeadingZero(String value)
-	{
-		boolean temp = valueIsInt(value);
-		if (!temp)
-			return false;
-
-		if (value.length() < 2)
-			return false;
-
-		if (value.charAt(0) == '0' && value.charAt(1) != '.')
-			return true;
-
-		return false;
 	}
 
 	public int importCSV(
@@ -1208,24 +1198,9 @@ public class AdminService
 					colName = "Column " + (iCol + 1);
 				// save original column name
 				originalColumnNames[iCol] = colName;
-				// if the column name has "/", "\", ".", "<", ">".
-				colName = colName.replace("/", "");
-				colName = colName.replace("\\", "");
-				colName = colName.replace(".", "");
-				colName = colName.replace("<", "less than");
-				colName = colName.replace(">", "more than");
-				// if the length of the column name is longer than the 64-character limit
-				int maxColNameLength = 64 - 4; // leave space for "_123" if there end up being duplicate column names
 				boolean isKeyCol = csvKeyColumn.equalsIgnoreCase(colName);
-				// if name too long, remove spaces
-				if (colName.length() > maxColNameLength)
-					colName = colName.replace(" ", "");
-				// if still too long, truncate
-				if (colName.length() > maxColNameLength)
-				{
-					int half = maxColNameLength / 2 - 1;
-					colName = colName.substring(0, half) + "_" + colName.substring(colName.length() - half);
-				}
+				
+				colName = SQLUtils.fixColumnName(colName);
 				// copy new name if key column changed
 				if (isKeyCol)
 					csvKeyColumn = colName;
@@ -1258,12 +1233,10 @@ public class AdminService
 				// Format each line
 				for (int iCol = 0; iCol < columnNames.length && iCol < nextLine.length; iCol++)
 				{
-					// keep track of the longest String value found in this
-					// column
+					// keep track of the longest String value found in this column
 					fieldLengths[iCol] = Math.max(fieldLengths[iCol], nextLine[iCol].length());
 
-					// Change missing data into NULL, later add more cases to
-					// deal with missing data.
+					// Change missing data into NULL, later add more cases to deal with missing data.
 					String[] nullValuesStandard = new String[] {
 							"", ".", "..", " ", "-", "\"NULL\"", "NULL", "NaN" };
 					ALL_NULL_VALUES: for (String[] values : new String[][] {
@@ -1282,34 +1255,25 @@ public class AdminService
 					if (nextLine[iCol] == null)
 						continue;
 
-					// 04 is a string (but Integer.parseInt would not throw an exception)
 					try
 					{
-						String value = nextLine[iCol];
-						while (value.indexOf(',') > 0)
-							value = value.replace(",", ""); // valid input
-															// format
-
-						// if the value is an int or double with an extraneous
-						// leading zero, it's defined to be a string
-						if (valueHasLeadingZero(value))
-							types[iCol] = StringType;
-
-						// if the type was determined to be a string before (or
-						// just above), continue
+						// if the type was determined to be a string before, continue
 						if (types[iCol] == StringType)
 							continue;
+						
+						String value = nextLine[iCol];
+						while (value.indexOf(',') > 0)
+							value = value.replace(",", ""); // valid input format
 
-						// if the type is an int
+						// if the type is an int (the default)
 						if (types[iCol] == IntType)
 						{
-							// check that it's still an int
+							// check that int is still acceptable
 							if (valueIsInt(value))
 								continue;
 						}
 
-						// it either wasn't an int or is no longer an int, check
-						// for a double
+						// it either wasn't an int or is no longer an int, check for a double
 						if (valueIsDouble(value))
 						{
 							types[iCol] = DoubleType;
@@ -1327,8 +1291,7 @@ public class AdminService
 				}
 			}
 
-			// now we need to remove commas from any numeric values because the
-			// SQL drivers don't like it
+			// now we need to remove commas from any numeric values because the SQL drivers don't like it
 			for (int iRow = 1; iRow < rows.length; iRow++)
 			{
 				String[] nextLine = rows[iRow];
@@ -1542,7 +1505,7 @@ public class AdminService
 					{
 						String filteredQuery = buildFilteredQuery(conn, query, filteredValues.columnNames);
 						titles.add(buildFilteredColumnTitle(configColumnNames[iCol], filteredValues.rows[iRow]));
-						sqlFields.add(sqlColumn);
+						sqlFields.add(sqlColumnNames[iCol]);
 						queries.add(filteredQuery);
 						queryParamsList.add(filteredValues.rows[iRow]);
 						dataTypes.add(testQueryAndGetDataType(conn, filteredQuery, filteredValues.rows[iRow]));
@@ -1551,7 +1514,7 @@ public class AdminService
 				else
 				{
 					titles.add(configColumnNames[iCol]);
-					sqlFields.add(sqlColumn);
+					sqlFields.add(sqlColumnNames[iCol]);
 					queries.add(query);
 					dataTypes.add(testQueryAndGetDataType(conn, query, null));
 				}

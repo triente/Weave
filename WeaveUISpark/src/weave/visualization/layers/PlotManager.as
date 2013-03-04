@@ -32,19 +32,18 @@ package weave.visualization.layers
 	
 	import weave.Weave;
 	import weave.api.WeaveAPI;
-	import weave.api.copySessionState;
-	import weave.api.core.ILinkableObject;
-	import weave.api.data.IKeySet;
-	import weave.api.data.IQualifiedKey;
-	import weave.api.data.ISimpleGeometry;
 	import weave.api.getCallbackCollection;
 	import weave.api.linkableObjectIsBusy;
 	import weave.api.newDisposableChild;
 	import weave.api.newLinkableChild;
-	import weave.api.primitives.IBounds2D;
 	import weave.api.registerDisposableChild;
 	import weave.api.registerLinkableChild;
 	import weave.api.setSessionState;
+	import weave.api.core.ILinkableObject;
+	import weave.api.data.IKeySet;
+	import weave.api.data.IQualifiedKey;
+	import weave.api.data.ISimpleGeometry;
+	import weave.api.primitives.IBounds2D;
 	import weave.api.ui.IPlotter;
 	import weave.api.ui.IPlotterWithGeometries;
 	import weave.api.ui.ITextPlotter;
@@ -319,17 +318,25 @@ package weave.visualization.layers
 			// make sure callbacks only trigger once.
 			getCallbackCollection(zoomBounds).delayCallbacks();
 			
-			// zoom to that bounds, expanding the area to keep the fixed aspect ratio
-			// if tempBounds is undefined and enableAutoZoomToExtent is enabled, this will zoom to the full extent.
-			zoomBounds.setDataBounds(tempBounds, true);
-			
-			// zoom out to include the specified margin
-			zoomBounds.getDataBounds(tempBounds);
-			var scale:Number = 1 / (1 - zoomMarginPercent);
-			tempBounds.setWidth(tempBounds.getWidth() * scale);
-			tempBounds.setHeight(tempBounds.getHeight() * scale);
-			zoomBounds.setDataBounds(tempBounds);
-			
+			if (tempBounds.isEmpty())
+			{
+				zoomBounds.getDataBounds(tempDataBounds);
+				tempDataBounds.setCenter(tempBounds.getXCenter(), tempBounds.getYCenter());
+				zoomBounds.setDataBounds(tempDataBounds);
+			}
+			else
+			{
+				// zoom to that bounds, expanding the area to keep the fixed aspect ratio
+				// if tempBounds is undefined and enableAutoZoomToExtent is enabled, this will zoom to the full extent.
+				zoomBounds.setDataBounds(tempBounds, true);
+				
+				// zoom out to include the specified margin
+				zoomBounds.getDataBounds(tempBounds);
+				var scale:Number = 1 / (1 - zoomMarginPercent);
+				tempBounds.setWidth(tempBounds.getWidth() * scale);
+				tempBounds.setHeight(tempBounds.getHeight() * scale);
+				zoomBounds.setDataBounds(tempBounds);
+			}
 			getCallbackCollection(zoomBounds).resumeCallbacks();
 		}
 

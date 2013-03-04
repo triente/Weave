@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
 /*
-    Weave (Web-based Analysis and Visualization Environment)
-    Copyright (C) 2008-2011 University of Massachusetts Lowell
+Weave (Web-based Analysis and Visualization Environment)
+Copyright (C) 2008-2011 University of Massachusetts Lowell
 
-    This file is a part of Weave.
+This file is a part of Weave.
 
-    Weave is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License, Version 3,
-    as published by the Free Software Foundation.
+Weave is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License, Version 3,
+as published by the Free Software Foundation.
 
-    Weave is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
+Weave is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
 
-    You should have received a copy of the GNU General Public License
-    along with Weave.  If not, see <http://www.gnu.org/licenses/>.
+You should have received a copy of the GNU General Public License
+along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 */
 -->
 <SimpleVisTool xmlns="weave.visualization.tools.*" 
@@ -25,10 +25,12 @@
 			   layout="absolute">
 	<mx:Script>
 		<![CDATA[
+			import weave.api.linkSessionState;
 			import weave.Weave;
 			import weave.api.copySessionState;
 			import weave.api.getCallbackCollection;
 			import weave.api.linkBindableProperty;
+			import weave.api.newLinkableChild;
 			import weave.api.registerLinkableChild;
 			import weave.core.LinkableDynamicObject;
 			import weave.data.AttributeColumns.DynamicColumn;
@@ -42,10 +44,12 @@
 			import weave.visualization.plotters.ColorBinLegendPlotter;
 			import weave.visualization.plotters.SizeBinLegendPlotter;
 			
+			private const indent:int = 120;
+			private const inputWidth:int = 64;
 			private const COLOR_LEGEND_LAYER_NAME:String = "color legend";
 			private var _sizeBinLegendPlotter:SizeBinLegendPlotter;
 			private var _sizeBinLegendLayerSettings:LayerSettings;
-			private var _colorLegendLayerSettings:LayerSettings;
+			private var _colorLegendLayerSettings:LayerSettings;			
 			
 			override protected function constructor():void
 			{
@@ -65,13 +69,13 @@
 				visualization.plotManager.marginTop.value    = DEFAULT_MARGIN_TOP.toString();
 				visualization.plotManager.marginLeft.value   = "5";
 				visualization.plotManager.marginRight.value  = "5";
-
+				
 				visualization.topMarginClickCallbacks.addImmediateCallback(this, handleMarginLabelClick);
 				colorColumn.addImmediateCallback(this, updateMarginLabel, true);
 				
 				panelWidth.value = "20%";
 				panelHeight.value = "50%";
-
+				
 				getCallbackCollection(LinkableTextFormat.defaultTextFormat).addGroupedCallback(this, updateMarginLabel, true);
 			}
 			
@@ -80,7 +84,34 @@
 				super.childrenCreated();
 				visualization.plotManager.marginTopNumber.addGroupedCallback(this, handleMarginChange);
 				linkBindableProperty(visualization.plotManager.marginTopNumber, marginLabel, "height");
+				
+				
+				var delay:int = 500;
+				linkBindableProperty(_sizeBinLegendPlotter.numberOfCircles, numOfCirclesNumericStepper, 'value', delay);
+				linkBindableProperty(_sizeBinLegendPlotter.customCircleRadiuses, circleRadiusesTextInput, 'text', delay);
+				
+				_sizeBinLegendPlotter.typeRadio.addImmediateCallback(this, updateTypeRadioUI);
 			}
+			
+			private function updateTypeRadioUI():void
+			{
+				if (_sizeBinLegendPlotter.typeRadio.value == SizeBinLegendPlotter.simpleRadio)
+					typeGroup.selection = simpleRadio;
+				else if (_sizeBinLegendPlotter.typeRadio.value == SizeBinLegendPlotter.customRadio)
+					typeGroup.selection = customRadio;
+			}
+			
+			private function handleTypeRadio():void
+			{
+				// this may be zero even if children are created.
+				if (typeGroup.numRadioButtons == 0) return;
+				
+				if (typeGroup.selection == simpleRadio)
+					_sizeBinLegendPlotter.typeRadio.value = SizeBinLegendPlotter.simpleRadio;
+				else if (typeGroup.selection == customRadio)
+					_sizeBinLegendPlotter.typeRadio.value = SizeBinLegendPlotter.customRadio;
+			}
+			
 			private static const DEFAULT_MARGIN_TOP:int = 25;
 			private function handleMarginChange():void
 			{
@@ -99,9 +130,14 @@
 				
 				if (scatterPlot != null)
 				{
+					// One time session state copy
 					copySessionState(scatterPlot.plotter.screenRadius, _sizeBinLegendPlotter.radiusColumn);
 					copySessionState(scatterPlot.plotter.minScreenRadius, _sizeBinLegendPlotter.minScreenRadius);
 					copySessionState(scatterPlot.plotter.maxScreenRadius, _sizeBinLegendPlotter.maxScreenRadius);
+					
+					copySessionState(scatterPlot.plotter.absoluteValueColorEnabled, _sizeBinLegendPlotter.absoluteValueColorEnabled);
+					copySessionState(scatterPlot.plotter.absoluteValueColorMin, _sizeBinLegendPlotter.absoluteValueColorMin);
+					copySessionState(scatterPlot.plotter.absoluteValueColorMax, _sizeBinLegendPlotter.absoluteValueColorMax);
 				}
 				
 				if (scatterPlot && scatterPlot.plotter.enabledSizeBy.value)
@@ -148,7 +184,7 @@
 					marginLabelText = ColumnUtils.getTitle(_sizeBinLegendPlotter.radiusColumn);
 					marginLabelMode = MARGIN_LABEL_MODE_SIZE;
 				}
-
+				
 				LinkableTextFormat.defaultTextFormat.copyToStyle(marginLabel);
 			}
 			
@@ -170,20 +206,43 @@
 				 wordWrap="true" selectable="false" editable="false"
 				 borderThickness="0" backgroundAlpha="0"
 				 toolTip="{lang('{0}\r\tClick here to select the attribute used for {1}.', marginLabelText, marginLabelMode)}"/>
-
+	
 	<ui:ControlPanel>
-			<mx:Panel id="attributesPanel" 
-					  label="{lang('Display Preferences')}"
-					  headerHeight="2"
-					  borderColor="0x000000" 
-					  backgroundColor="0xCCCCCC" 
-					  backgroundAlpha="0.0" 
-					  borderThickness="0.0" 
-					  height="100%" 
-					  width="100%" 
-					  borderAlpha="0.2" 
-					  borderStyle="none">
-				<mx:CheckBox id="marginLabelCheckBox" label="{lang('Show legend attribute name')}" change="visualization.plotManager.marginTopNumber.value = marginLabelCheckBox.selected ? DEFAULT_MARGIN_TOP : 0;" toolTip="{lang('Click to hide the title of the Legend.')}"/>
-			</mx:Panel>
+		<mx:VBox label="{lang('Tick Marks')}">
+			<mx:RadioButtonGroup id="typeGroup" change="handleTypeRadio()"/>
+			<mx:HBox width="100%" verticalAlign="middle">
+				<mx:RadioButton id="simpleRadio" label="{lang('Equally Spaced')}" groupName="typeGroup" selected="true" width="100%"/>
+				<ui:Indent enabled="{simpleRadio.selected}" label="{lang('Number of Radiuses:')}" indent="{indent}">
+					<mx:NumericStepper minimum="1" maximum="100" stepSize="1" id="numOfCirclesNumericStepper" width="{inputWidth}"/>
+				</ui:Indent>
+				<ui:HelpComponent label="{simpleRadio.label}">
+					Example: If your data is between 0 and 100 and you specify 3 radiuses, the following radiuses will be created: 0, 50, 100
+				</ui:HelpComponent>
+			</mx:HBox>
+			
+			<mx:HRule width="100%"/>
+			
+			<mx:HBox width="100%" verticalAlign="middle">
+				<mx:RadioButton id="customRadio" label="{lang('Custom Radiuses')}" groupName="typeGroup" width="100%"/>
+				<mx:TextInput enabled="{customRadio.selected}" id="circleRadiusesTextInput" width="100%"/>
+				<ui:HelpComponent label="{customRadio.label}">
+					Enter comma-separated custom break values between min and max value of the size data for radiuses.
+				</ui:HelpComponent>
+			</mx:HBox>
+		</mx:VBox>
+		
+		<mx:Panel id="attributesPanel" 
+				  label="{lang('Display Preferences')}"
+				  headerHeight="2"
+				  borderColor="0x000000" 
+				  backgroundColor="0xCCCCCC" 
+				  backgroundAlpha="0.0" 
+				  borderThickness="0.0" 
+				  height="100%" 
+				  width="100%" 
+				  borderAlpha="0.2" 
+				  borderStyle="none">
+			<mx:CheckBox id="marginLabelCheckBox" label="{lang('Show legend attribute name')}" change="visualization.plotManager.marginTopNumber.value = marginLabelCheckBox.selected ? DEFAULT_MARGIN_TOP : 0;" toolTip="{lang('Click to hide the title of the Legend.')}"/>
+		</mx:Panel>
 	</ui:ControlPanel>
 </SimpleVisTool>
