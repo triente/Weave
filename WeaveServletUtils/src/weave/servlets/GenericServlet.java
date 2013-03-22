@@ -152,8 +152,7 @@ public class GenericServlet extends HttpServlet
 	}
 	
 	/**
-	 * This function will expose all the public methods of a class as servlet methods.
-	 * @param serviceObject The object containing public methods to be exposed by the servlet.
+	 * This function will expose all the public methods of this object as servlet methods.
 	 */
 	protected void initLocalMethods()
 	{
@@ -169,7 +168,7 @@ public class GenericServlet extends HttpServlet
 	{
 		Method[] genericServletMethods = GenericServlet.class.getMethods();
 		Method[] declaredMethods = serviceObject.getClass().getDeclaredMethods();
-		for (int i = declaredMethods.length - 1; i >= 0; i--)
+		for (int i = declaredMethods.length; i-- > 0;)
 		{
 			Method declaredMethod = declaredMethods[i];
 			boolean shouldIgnore = false;
@@ -192,7 +191,7 @@ public class GenericServlet extends HttpServlet
     
     /**
      * @param serviceObject The instance of an object to use in the servlet.
-     * @param methodName The method to expose on serviceObject.
+     * @param method The method to expose on serviceObject.
      */
     synchronized protected void initMethod(Object serviceObject, Method method)
     {

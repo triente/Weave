@@ -150,8 +150,7 @@ package
 				ThermometerTool,
 				TimeSliderTool,
 				TransposedTableTool,
-				RamachandranPlotTool,
-				DataStatisticsTool
+				RamachandranPlotTool
 			]).toString();
 			
 			/**
