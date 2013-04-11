@@ -385,6 +385,9 @@ package weave
 			
 			// hack for forcing VisApplication menu to refresh
 			getCallbackCollection(Weave.properties).triggerCallbacks();
+			
+			if (WeaveAPI.externalInterfaceInitialized)
+				properties.runStartupJavaScript();
 		}
 		
 		private static const WEAVE_RELOAD_SHARED_OBJECT:String = "WeaveExternalReload";
@@ -502,6 +505,24 @@ package weave
 			obj.close();
 			
 			return saved != null;
+		}
+		
+		
+		[Embed(source="WeaveStartup.js", mimeType="application/octet-stream")]
+		private static const WeaveStartup:Class;
+
+		public static function initJavaScriptDragDrop():void
+		{
+			if (!ExternalInterface.available)
+				return;
+			try
+			{
+				ExternalInterface.call(String(new WeaveStartup()), ExternalInterface.objectID);
+			}
+			catch (e:Error)
+			{
+				reportError(e);
+			}
 		}
 	}
 }

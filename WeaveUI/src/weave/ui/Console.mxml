@@ -78,6 +78,7 @@
 				super.childrenCreated();
 				
 				compiler.includeLibraries(GlobalLib, WeaveAPI, Weave, ObjectUtil, WeaveAPI.SessionManager, DescribeType, DebugUtils);
+				compiler.setHashOperator(debugHelper);
 				input.getTextField().alwaysShowSelection = true;
 		    }
 			
@@ -119,7 +120,7 @@
 					var result:String = compiler.compileToFunction(script, symbolTable, false, true).apply(thisArg);
 					consoleTrace(result);
 				}
-				catch (e:Error)
+				catch (e:*)
 				{
 					consoleTrace(script, e);
 				}
@@ -227,7 +228,7 @@
 						else
 							result = String(result);
 					}
-					catch (e:Error)
+					catch (e:*)
 					{
 						result = String(result)
 					}
@@ -235,9 +236,12 @@
 					input.text = '';
 					historyIndex = history.length;
 				}
-				catch (e:Error)
+				catch (e:*)
 				{
 					result = e;
+					var error:Error = e as Error;
+					if (error)
+						trace(error.getStackTrace());
 				}
 				
 				// append result to log
