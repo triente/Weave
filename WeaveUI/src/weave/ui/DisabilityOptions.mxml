@@ -33,23 +33,35 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			  title="Disability Options" verticalScrollPolicy="off">
 	<mx:HDividedBox id="disabilityOptions" width="100%" height="100%" paddingBottom="{padding}"
 					paddingLeft="{padding}" paddingRight="{padding}" paddingTop="{padding}">
+		
 		<mx:TabNavigator height="100%" borderStyle="inset">
+			
 			<mx:VBox width="100%" height="100%" label="Basic" horizontalAlign="left"
 					 verticalAlign="top">
-				<mx:Label text="HTML Alt Text:" textAlign="left"/>
-				<mx:TextInput id="altTextInputBox" width="100%" height="30%"
+				<mx:Label text="Short Description:" paddingLeft="5" textAlign="left"/>
+				<mx:TextInput id="altTextInputBox" width="80%" height="30%"
 							  backgroundColor="#EEEEEE" editable="true" horizontalCenter="true"
-							  toolTip="Text entered here will be used to set the html alt attribute for this instance of Weave when it is embedded in a web page. This input field is restricted to 125 characters. The alt attribute is used by standard screen reading tools to give information about graphics elements for to blind or visually impaired individuals."/>
+							  toolTip="Enter a general desciption here that will be readable by standard screen reading tools to give information about graphics elements to individuals with visual disabilities."/>
 			</mx:VBox>
+			
 			<mx:VBox width="100%" height="100%" label="Advanced" horizontalAlign="left"
 					 verticalAlign="top">
-				<mx:Label text="longdesc text" textAlign="left"/>
-				<mx:TextInput id="longDescTextInputBox" width="100%" height="30%"
+				
+				<mx:CheckBox id="useAdvancedDescriptionCheckbox" label="Use advanced description."
+							 creationComplete="linkBindableProperty(useAdvancedDescriptionCheckbox, event.target, 'selected')"/>
+				
+				<mx:Label text="Long description" textAlign="left"/>
+				
+				<mx:TextInput id="longDescriptionTextInputBox" width="80%" height="50% "
 							  backgroundColor="#EEEEEE" enabled="true" horizontalCenter="true"
 							  toolTip="Text entered here will be used to set the html longdesc attribute for this instance of Weave when it is embedded in a web page. This input size is not restricted but it is not recommended that it be any longer than necessary."/>
-				<mx:Button label="Refresh" click="updateCheckBoxes()" paddingLeft="5"
+				
+				<mx:Button label="Fetch Visualizations" click="updateCheckBoxes()" paddingLeft="5"
 						   paddingRight="5" toolTip="Refresh the list of visualizations"/>
-				<mx:CheckBox id="shortDescriptionCheckbox" label="Short Description"/>
+				
+				<mx:CheckBox id="shortDescriptionCheckbox" label="Add Short Description" selected="true"
+							 creationComplete="linkBindableProperty("/>
+				
 				<mx:VBox id="menuToggleVBox" verticalScrollPolicy="on">
 					
 					<mx:Script>
@@ -70,8 +82,8 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 							
 							import weave.Weave;
 							import weave.api.WeaveAPI;
-							import weave.api.core.ILinkableObject;
 							import weave.api.core.IDisposableObject;
+							import weave.api.core.ILinkableObject;
 							import weave.api.detectLinkableObjectChange;
 							import weave.api.linkBindableProperty;
 							import weave.api.linkSessionState;
@@ -81,6 +93,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 							import weave.api.reportError;
 							import weave.api.ui.ILinkableObjectEditor;
 							import weave.core.DynamicState;
+							import weave.core.LinkableBoolean;
 							import weave.core.LinkableHashMap;
 							import weave.core.LinkableString;
 							import weave.core.SessionManager;
@@ -89,6 +102,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 							import weave.ui.SessionStateEditor;
 							
 							
+							private const useAdancedDescription:LinkableBoolean = new LinkableBoolean(false);
 							
 							private const padding:int = 5;
 							private var cbArray:Array = [];
