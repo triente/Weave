@@ -33,6 +33,7 @@ package weave.utils
 	import weave.api.core.ILinkableObject;
 	import weave.api.getCallbackCollection;
 	import weave.primitives.GeneralizedGeometry;
+	import weave.primitives.GeometryType;
 	
 	
 	/**
@@ -61,13 +62,10 @@ package weave.utils
 		
 		private function iterate(stopTime:int):Number
 		{
-			while (true)
+			for (; irecord < records.length; irecord++)
 			{
-				if (irecord >= records.length) // in case length is zero
-					return 1;
-				
-				if (getTimer() < stopTime)
-					break;
+				if (getTimer() > stopTime)
+					return irecord / records.length;
 	
 				var iring:int
 				var ipoint:int;
@@ -81,7 +79,7 @@ package weave.utils
 	
 				if( record.shape is ShpPolygon )
 				{
-					geom.geomType = GeneralizedGeometry.GEOM_TYPE_POLYGON;
+					geom.geomType = GeometryType.POLYGON;
 					var poly:ShpPolygon = record.shape as ShpPolygon;
 					for(iring = 0; iring < poly.rings.length; iring++ )
 					{
@@ -94,20 +92,17 @@ package weave.utils
 					}
 				}
 				if( record.shape is ShpPolyline )
-					geom.geomType = GeneralizedGeometry.GEOM_TYPE_LINE;
+					geom.geomType = GeometryType.LINE;
 				if( record.shape is ShpPoint )
 				{
-					geom.geomType = GeneralizedGeometry.GEOM_TYPE_POINT;
+					geom.geomType = GeometryType.POINT;
 					point = record.shape as ShpPoint;
 					points.push( point.x, point.y );
 				}
 				geom.setCoordinates( points, BLGTreeUtils.METHOD_SAMPLE );
 				geoms.push(geom);
-				
-				irecord++
 			}
-			
-			return irecord / records.length;
+			return 1;
 		}
 		
 		private function asyncComplete():void

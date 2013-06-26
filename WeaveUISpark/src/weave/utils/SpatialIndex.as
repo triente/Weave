@@ -21,6 +21,7 @@ package weave.utils
 {
 	import flash.geom.Point;
 	import flash.utils.Dictionary;
+	import flash.utils.getTimer;
 	
 	import weave.Weave;
 	import weave.api.WeaveAPI;
@@ -92,16 +93,11 @@ package weave.utils
 		/**
 		 * This function gets a list of Bounds2D objects associated with a key.
 		 * @param key A record key.
-		 * @result An Array of Bounds2D objects associated with the key.
+		 * @result An Array of Bounds2D objects associated with the key, or null if there are none.
 		 */
 		public function getBoundsFromKey(key:IQualifiedKey):Array
 		{
-			var result:Array = _keyToBoundsMap[key] as Array;
-			
-			if (result == null)
-				result = [];
-			
-			return result;
+			return _keyToBoundsMap[key] as Array;
 		}
 		
 		/**
@@ -146,10 +142,10 @@ package weave.utils
 
 			if (plotter)
 			{
-				collectiveBounds.copyFrom(plotter.getBackgroundDataBounds());
+				plotter.getBackgroundDataBounds(collectiveBounds);
 				
 				// make a copy of the keys vector
-				VectorUtils.copy(plotter.keySet.keys, _keysArray);			
+				VectorUtils.copy(plotter.filteredKeySet.keys, _keysArray);			
 			}
 			
 			// if auto-balance is disabled, randomize insertion order
@@ -163,26 +159,14 @@ package weave.utils
 			
 			// insert bounds-to-key mappings in the kdtree
 			_prevTriggerCounter = triggerCounter; // used to detect change during iterations
-			_iterateAll(true); // restart from first task
+			_iterateAll(-1); // restart from first task
 			WeaveAPI.StageUtils.startTask(this, _iterateAll, WeaveAPI.TASK_PRIORITY_BUILDING, triggerCallbacks);
 		}
 		
-		private const _iterateAll:Function = StageUtils.generateCompoundIterativeTask([_iterate1, _iterate2]);
+		private const _iterateAll:Function = StageUtils.generateCompoundIterativeTask(_iterate1, _iterate2);
 		
-		private function _iterate1():Number
+		private function _iterate1(stopTime:int):Number
 		{
-			if (_keysIndex >= _keysArray.length)
-				return 1;
-			
-			var key:IQualifiedKey = _keysArray[_keysIndex] as IQualifiedKey;
-			_keyToBoundsMap[key] = _plotter.getDataBoundsFromRecordKey(key);
-			
-			if (_keyToGeometriesMap != null)
-			{
-				var geoms:Array = (_plotter as IPlotterWithGeometries).getGeometriesFromRecordKey(key);
-				_keyToGeometriesMap[key] = geoms;
-			}
-			
 			// stop if callbacks were triggered since the iterations started
 			if (triggerCounter != _prevTriggerCounter)
 			{
@@ -190,47 +174,62 @@ package weave.utils
 				return 0;
 			}
 			
-			_keysIndex++;
-			
-			return _keysIndex / _keysArray.length;
+			for (; _keysIndex < _keysArray.length; _keysIndex++)
+			{
+				if (getTimer() > stopTime)
+					return _keysIndex / _keysArray.length;
+				
+				var key:IQualifiedKey = _keysArray[_keysIndex] as IQualifiedKey;
+				var boundsArray:Array = _keyToBoundsMap[key] as Array;
+				if (!boundsArray)
+					_keyToBoundsMap[key] = boundsArray = [];
+				
+				_plotter.getDataBoundsFromRecordKey(key, boundsArray);
+				
+				if (_keyToGeometriesMap != null)
+				{
+					var geoms:Array = (_plotter as IPlotterWithGeometries).getGeometriesFromRecordKey(key);
+					_keyToGeometriesMap[key] = geoms;
+				}
+			}
+			return 1;
 		}
 			
-		private function _iterate2():Number
+		private function _iterate2(stopTime:int):Number
 		{
-			if (_keysArrayIndex >= _keysArray.length)
-				return 1;
-			
-			var key:IQualifiedKey = _keysArray[_keysArrayIndex] as IQualifiedKey;
-			if (!_boundsArray) // is there an existing nested array?
+			for (; _keysArrayIndex < _keysArray.length; _keysArrayIndex++)
 			{
-				//trace(key.keyType,key.localName,'(',_keysArrayIndex,'/',_keysArray.length,')');
-				// begin outer loop iteration
-				_boundsArray = getBoundsFromKey(key);
-				_boundsArrayIndex = 0;
-			}
-			if (_boundsArrayIndex < _boundsArray.length) // iterate on nested array
-			{
-				//trace('bounds(',_boundsArrayIndex,'/',_boundsArray.length,')');
-				var bounds:IBounds2D = _boundsArray[_boundsArrayIndex] as IBounds2D;
-				// do not index shapes with undefined bounds
-				//TODO: index shapes with missing bounds values into a different index
-				// TEMPORARY SOLUTION: store missing bounds if queryMissingBounds == true
-				if (!bounds.isUndefined() || _queryMissingBounds)
-					_kdTree.insert([bounds.getXNumericMin(), bounds.getYNumericMin(), bounds.getXNumericMax(), bounds.getYNumericMax(), bounds.getArea()], key);
-				// always include bounds because it may have some coords defined while others aren't
-				collectiveBounds.includeBounds(bounds);
-				// increment inner index
-				_boundsArrayIndex++;
-			}
-			if (_boundsArrayIndex == _boundsArray.length)
-			{
+				var key:IQualifiedKey = _keysArray[_keysArrayIndex] as IQualifiedKey;
+				if (!_boundsArray) // is there an existing nested array?
+				{
+					//trace(key.keyType,key.localName,'(',_keysArrayIndex,'/',_keysArray.length,')');
+					// begin outer loop iteration
+					_boundsArray = _keyToBoundsMap[key];
+					
+					if (!_boundsArray)
+						continue;
+					
+					_boundsArrayIndex = 0;
+				}
+				for (; _boundsArrayIndex < _boundsArray.length; _boundsArrayIndex++) // iterate on nested array
+				{
+					if (getTimer() > stopTime)
+						return _keysArrayIndex / _keysArray.length;
+					
+					//trace('bounds(',_boundsArrayIndex,'/',_boundsArray.length,')');
+					var bounds:IBounds2D = _boundsArray[_boundsArrayIndex] as IBounds2D;
+					// do not index shapes with undefined bounds
+					//TODO: index shapes with missing bounds values into a different index
+					// TEMPORARY SOLUTION: store missing bounds if queryMissingBounds == true
+					if (!bounds.isUndefined() || _queryMissingBounds)
+						_kdTree.insert([bounds.getXNumericMin(), bounds.getYNumericMin(), bounds.getXNumericMax(), bounds.getYNumericMax(), bounds.getArea()], key);
+					// always include bounds because it may have some coords defined while others aren't
+					collectiveBounds.includeBounds(bounds);
+				}
 				// all done with nested array
 				_boundsArray = null;
-				// increment outer index
-				_keysArrayIndex++;
 			}
-			
-			return _keysArrayIndex / _keysArray.length;
+			return 1;
 		}
 		
 		/**
@@ -258,7 +257,7 @@ package weave.utils
 		{
 			for (var i:int = 0; i < line.length - 1; ++i)
 			{
-				if (ComputationalGeometryUtils.polygonOverlapsLine(polygon, line[i].x, line[i].y, line[i + 1].x, line[i + 1].y))
+				if (GeometryUtils.polygonOverlapsLine(polygon, line[i].x, line[i].y, line[i + 1].x, line[i + 1].y))
 				{
 					return true;
 				}
@@ -270,7 +269,7 @@ package weave.utils
 		{
 			for (var i:int = 0; i < point.length; ++i)
 			{
-				if (ComputationalGeometryUtils.polygonOverlapsPoint(polygon, point[i].x, point[i].y))
+				if (GeometryUtils.polygonOverlapsPoint(polygon, point[i].x, point[i].y))
 					return true;
 			}
 			
@@ -281,7 +280,7 @@ package weave.utils
 			var min:Number = Number.POSITIVE_INFINITY;
 			for (var i:int = 0; i < line.length - 1; ++i)
 			{
-				var distance:Number = ComputationalGeometryUtils.getUnscaledDistanceFromLine(line[i].x, line[i].y, line[i + 1].x, line[i + 1].y, x, y);
+				var distance:Number = GeometryUtils.getUnscaledDistanceFromLine(line[i].x, line[i].y, line[i + 1].x, line[i + 1].y, x, y);
 				min = Math.min(distance, min);
 			}			
 			return min;
@@ -291,7 +290,7 @@ package weave.utils
 			var min:Number = Number.POSITIVE_INFINITY;
 			for (var i:int = 0; i < points.length; ++i)
 			{
-				var distance:Number = ComputationalGeometryUtils.getDistanceFromPointSq(points[i].x, points[i].y, x, y);
+				var distance:Number = GeometryUtils.getDistanceFromPointSq(points[i].x, points[i].y, x, y);
 				min = Math.min(distance, min);
 			}
 			return min;
@@ -360,10 +359,11 @@ package weave.utils
 			// define the bounds as a polygon
 			setTempBounds(queryBounds);
 			
+			var test:uint;
 			var result:Array = [];
 			
 			// for each key, look up its geometries 
-			keyLoop: for (var i:int = keys.length - 1; i >= 0; --i)
+			keyLoop: for (var i:int = keys.length; i--;)
 			{
 				var key:IQualifiedKey = keys[i];
 				var geoms:Array = _keyToGeometriesMap[key];
@@ -377,8 +377,8 @@ package weave.utils
 				// for each geometry, get vertices, check type, and do proper geometric overlap
 				for (var iGeom:int = 0; iGeom < geoms.length; ++iGeom)
 				{
+					var overlapCount:int = 0;
 					var geom:Object = geoms[iGeom];
-					
 					if (geom is GeneralizedGeometry)
 					{
 						var genGeom:GeneralizedGeometry = geom as GeneralizedGeometry;
@@ -387,24 +387,27 @@ package weave.utils
 						var genGeomIsPoint:Boolean = genGeom.isPoint();
 						var simplifiedGeom:Vector.<Vector.<BLGNode>> = genGeom.getSimplifiedGeometry(minImportance, dataBounds);
 						
-						if (simplifiedGeom.length == 0)
+						if (simplifiedGeom.length == 0 && genGeom.bounds.overlaps(queryBounds))
 						{
 							result.push(key);
 							continue keyLoop;
 						}
 						
 						// for each part, build the vertices polygon and check for the overlap
-						for (var iPart:int = 0; iPart < simplifiedGeom.length; ++iPart)
+						for each (var part:Vector.<BLGNode> in simplifiedGeom)
 						{
-							// get the part
-							var part:Vector.<BLGNode> = simplifiedGeom[iPart];
 							if (part.length == 0) // if no points, continue
 								continue;
 							
 							// if a polygon, check for polygon overlap
 							if (genGeomIsPoly)
 							{
-								if (ComputationalGeometryUtils.polygonOverlapsPolygon(_tempBoundsPolygon, part))
+								test = GeometryUtils.polygonOverlapsPolygon(_tempBoundsPolygon, part);
+								if (test == GeometryUtils.CONTAINED_IN)
+								{
+									overlapCount++;
+								}
+								else if (test != GeometryUtils.NO_OVERLAP)
 								{
 									result.push(key);
 									continue keyLoop;
@@ -439,7 +442,7 @@ package weave.utils
 						
 						if (simpleGeomIsPoly)// a polygon, check for polygon overlap
 						{
-							if (ComputationalGeometryUtils.polygonOverlapsPolygon(_tempBoundsPolygon, vertices))
+							if (GeometryUtils.polygonOverlapsPolygon(_tempBoundsPolygon, vertices))
 							{
 								result.push(key);
 								continue keyLoop;
@@ -461,7 +464,12 @@ package weave.utils
 								continue keyLoop;
 							}
 						}
-						
+					}
+					
+					if (overlapCount % 2)
+					{
+						result.push(key);
+						continue keyLoop;
 					}
 				} // end for each (var geom...
 			} // end for each (var key...
@@ -528,68 +536,66 @@ package weave.utils
 							var genGeomIsPoint:Boolean = genGeom.isPoint();
 							var genGeomBounds:IBounds2D = genGeom.bounds;
 							var simplifiedGeom:Vector.<Vector.<BLGNode>> = (geom as GeneralizedGeometry).getSimplifiedGeometry(importance, dataBounds);
+							var overlapCount:int = 0;
 							
-							for (var i:int = 0; i < simplifiedGeom.length; ++i)
+							for each (var part:Vector.<BLGNode> in simplifiedGeom)
 							{
-								var part:Vector.<BLGNode> = simplifiedGeom[i];
-								
 								if (genGeomIsPoly)
 								{
+									distanceSq = geomDistance;
 									// if the polygon contains the point, this key is probably what we want
-									if (ComputationalGeometryUtils.polygonOverlapsPoint(part, xQueryCenter, yQueryCenter))
-									{
-										distanceSq = 0;
-										overlapsQueryCenter = true;
-									}
-									else
-									{
-										distanceSq = geomDistance;
-										overlapsQueryCenter = false;
-									}
+									if (GeometryUtils.polygonOverlapsPoint(part, xQueryCenter, yQueryCenter))
+										overlapCount++;
 								}
 								else if (genGeomIsLine)
 								{
 									distanceSq = getMinimumUnscaledDistanceFromPolyLine(part, xQueryCenter, yQueryCenter);
-									
 									if (distanceSq <= Number.MIN_VALUE)
+									{
 										overlapsQueryCenter = true;
-									else
-										overlapsQueryCenter = false;
+										break;
+									}
 								}
 								else if (genGeomIsPoint)
 								{
 									distanceSq = getMinimumUnscaledDistanceFromPolyPoint(part, xQueryCenter, yQueryCenter);
 									if (distanceSq <= Number.MIN_VALUE)
+									{
 										overlapsQueryCenter = true;
-									else 
-										overlapsQueryCenter = false;										
+										break;
+									}
 								}
-								
-								// Consider all keys until we have found one that overlaps the query center.
-								// Consider lines and points because although they may not overlap, it's very likely that no points or lines
-								// will overlap. If we consider all of them, we can still find the closest.
-								// After that, only consider keys that overlap query center.
-								if (!foundQueryCenterOverlap || overlapsQueryCenter || genGeomIsLine || genGeomIsPoint)
+							}
+							if (overlapCount % 2)
+							{
+								distanceSq = 0;
+								overlapsQueryCenter = true;
+							}
+							
+							// Consider all keys until we have found one that overlaps the query center.
+							// Consider lines and points because although they may not overlap, it's very likely that no points or lines
+							// will overlap. If we consider all of them, we can still find the closest.
+							// After that, only consider keys that overlap query center.
+							if (!foundQueryCenterOverlap || overlapsQueryCenter || genGeomIsLine || genGeomIsPoint)
+							{
+								// if this is the first record that overlaps the query center, reset the list of keys
+								if (!foundQueryCenterOverlap && overlapsQueryCenter)
 								{
-									// if this is the first record that overlaps the query center, reset the list of keys
-									if (!foundQueryCenterOverlap && overlapsQueryCenter)
-									{
-										resultCount = 0;
-										closestDistanceSq = Infinity;
-										foundQueryCenterOverlap = true;
-									}
-									// if this distance is closer than any previous distance, clear all previous keys
-									if (distanceSq < closestDistanceSq)
-									{
-										// clear previous result and update closest distance
-										resultCount = 0;
-										closestDistanceSq = distanceSq;
-									}
-									// add keys to the result if they are the closest so far
-									if (distanceSq == closestDistanceSq && (resultCount == 0 || result[resultCount - 1] != key))
-										result[resultCount++] = key;
+									resultCount = 0;
+									closestDistanceSq = Infinity;
+									foundQueryCenterOverlap = true;
 								}
-							}		
+								// if this distance is closer than any previous distance, clear all previous keys
+								if (distanceSq < closestDistanceSq)
+								{
+									// clear previous result and update closest distance
+									resultCount = 0;
+									closestDistanceSq = distanceSq;
+								}
+								// add keys to the result if they are the closest so far
+								if (distanceSq == closestDistanceSq && (resultCount == 0 || result[resultCount - 1] != key))
+									result[resultCount++] = key;
+							}
 						}
 						else  
 						{
@@ -602,7 +608,7 @@ package weave.utils
 							// calculate the distanceSq and overlapsQueryCenter
 							if (simpleGeomIsPoly)
 							{
-								if (ComputationalGeometryUtils.polygonOverlapsPoint(
+								if (GeometryUtils.polygonOverlapsPoint(
 									vertices, xQueryCenter, yQueryCenter))
 								{
 									distanceSq = 0;
@@ -704,13 +710,45 @@ package weave.utils
 		}
 
 		/**
+		 * This function will get the keys whose geometries intersect with the given array of geometries.
+		 * This function call getKeysOverlapGeometry below for each element in the array.
+		 * @param geometries an Array of ISimpleGeometry objects used to query the spatial index.
+		 * @param minImportance The minimum importance value to use when determining geometry overlap.
+		 * @param filterBoundingBoxesByImportance If true, bounding boxes will be pre-filtered by importance before checking geometry overlap.
+		 * @return An array of IQualifiedKey objects.
+		 **/		
+	
+
+		public function getKeysGeometryOverlapGeometries(geometries:Array, minImportance:Number = 0, filterBoundingBoxesByImportance:Boolean = false):Array
+		{
+			var queriedKeys:Array = [];
+			var keys:Dictionary = new Dictionary();
+
+			for each ( var geometry:ISimpleGeometry in geometries )
+			{
+				queriedKeys = getKeysGeometryOverlapGeometry(geometry, minImportance, filterBoundingBoxesByImportance);					
+				
+				for each (var key:IQualifiedKey in queriedKeys)
+				{
+					keys[key] = true;
+				}
+			}
+		
+			var result:Array = [];
+			for (var keyObj:* in keys)
+				result.push(keyObj as IQualifiedKey);
+			
+			return result;
+		}
+		
+		/**
 		 * This function will get the keys whose geometries intersect with the given geometry.
 		 * 
 		 * @param geometry An ISimpleGeometry object used to query the spatial index.
 		 * @param minImportance The minimum importance value to use when determining geometry overlap.
 		 * @param filterBoundingBoxesByImportance If true, bounding boxes will be pre-filtered by importance before checking geometry overlap.
 		 * @return An array of IQualifiedKey objects.
-		 */		
+		 */
 		public function getKeysGeometryOverlapGeometry(geometry:ISimpleGeometry, minImportance:Number = 0, filterBoundingBoxesByImportance:Boolean = false):Array
 		{
 			// first filter by bounds
@@ -718,21 +756,39 @@ package weave.utils
 			var queryGeomVertices:Array = geometry.getVertices();
 			var keys:Array = getKeysBoundingBoxOverlap((geometry as SimpleGeometry).bounds, filterBoundingBoxesByImportance ? minImportance : 0);
 			
-			if (_keyToGeometriesMap == null || !Weave.properties.enableGeometryProbing.value)
-				return keys;
+			var geomEnabled:Boolean = _keyToGeometriesMap && Weave.properties.enableGeometryProbing.value;
 			
 			var result:Array = [];
+			var test:uint;
 			
 			// for each key, look up its geometries 
-			keyLoop: for (var i:int = keys.length - 1; i >= 0; --i)
+			keyLoop: for (var i:int = keys.length; i--;)
 			{
 				var key:IQualifiedKey = keys[i];
-				var geoms:Array = _keyToGeometriesMap[key];
+				var overlapCount:int = 0;
 				
-				if (geoms.length == 0)
+				var geoms:Array = geomEnabled ? _keyToGeometriesMap[key] : null;
+				if (!geoms || geoms.length == 0)
 				{
-					result.push(key);
-					continue keyLoop;
+					var keyBounds:Array = _keyToBoundsMap[key];
+					for (var j:int = 0; j < keyBounds.length; j++)
+					{
+						setTempBounds(keyBounds[j]);
+						test = GeometryUtils.polygonOverlapsPolygon(queryGeomVertices,_tempBoundsPolygon);
+						if (test == GeometryUtils.CONTAINED_IN)
+						{
+							overlapCount++;
+						}
+						else if (test != GeometryUtils.NO_OVERLAP)
+						{
+							result.push(key);
+							continue keyLoop;
+						}
+					}
+					if (overlapCount % 2)
+						result.push(key);
+					//iterate over bounds from key and check if they intersect lasso polygon
+					continue;
 				}
 				
 				// for each geometry, get vertices, check type, and do proper geometric overlap
@@ -750,8 +806,14 @@ package weave.utils
 						
 						if (simplifiedGeom.length == 0)
 						{
-							result.push(key);
-							continue keyLoop;
+							//make the polygon
+							setTempBounds((geom as GeneralizedGeometry).bounds);
+							//check if the lasso polygon overlaps the geometry bounds
+							if (GeometryUtils.polygonOverlapsPolygon(queryGeomVertices, _tempBoundsPolygon))
+							{
+								result.push(key);
+								continue keyLoop;
+							}
 						}
 						
 						// for each part, build the vertices polygon and check for the overlap
@@ -765,7 +827,12 @@ package weave.utils
 							// if a polygon, check for polygon overlap
 							if (genGeomIsPoly)
 							{
-								if (ComputationalGeometryUtils.polygonOverlapsPolygon(queryGeomVertices, part))
+								test = GeometryUtils.polygonOverlapsPolygon(queryGeomVertices, part);
+								if (test == GeometryUtils.CONTAINED_IN)
+								{
+									overlapCount++;
+								}
+								else if (test != GeometryUtils.NO_OVERLAP)
 								{
 									result.push(key);
 									continue keyLoop;
@@ -800,7 +867,7 @@ package weave.utils
 						
 						if (simpleGeomIsPoly)// a polygon, check for polygon overlap
 						{
-							if (ComputationalGeometryUtils.polygonOverlapsPolygon(queryGeomVertices, vertices))
+							if (GeometryUtils.polygonOverlapsPolygon(queryGeomVertices, vertices))
 							{
 								result.push(key);
 								continue keyLoop;
@@ -822,7 +889,11 @@ package weave.utils
 								continue keyLoop;
 							}
 						}
-						
+					}
+					if (overlapCount % 2)
+					{
+						result.push(key);
+						continue keyLoop;
 					}
 				} // end for each (var geom...
 			} // end for each (var key...

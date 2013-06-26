@@ -57,7 +57,6 @@ package weave
 	import weave.core.SessionManager;
 	import weave.data.AttributeColumns.SecondaryKeyNumColumn;
 	import weave.data.AttributeColumns.StreamedGeometryColumn;
-	import weave.data.CSVParser;
 	import weave.utils.CSSUtils;
 	import weave.utils.LinkableTextFormat;
 	import weave.utils.NumberUtils;
@@ -66,7 +65,6 @@ package weave
 	import weave.visualization.layers.LinkableEventListener;
 	import weave.visualization.layers.filters.LinkableDropShadowFilter;
 	import weave.visualization.layers.filters.LinkableGlowFilter;
-
 
 
 	/**
@@ -99,7 +97,12 @@ package weave
 				}
 			);
 
+			_toggleToolsMenuItem("GraphTool", false);
+			_toggleToolsMenuItem("CustomGraphicsTool", false);
+			_toggleToolsMenuItem("DataStatisticsTool", false);
 			_toggleToolsMenuItem("RamachandranPlotTool", false);
+			_toggleToolsMenuItem("SchafersMissingDataTool", false);
+			_toggleToolsMenuItem("DataFilter", false);
 			panelTitleTextFormat.font.value = "Verdana";
 			panelTitleTextFormat.size.value = 10;
 			panelTitleTextFormat.color.value = 0xFFFFFF;
@@ -244,12 +247,10 @@ package weave
 		public function getToolToggle(classDef:Class):LinkableBoolean
 		{
 			var className:String = getQualifiedClassName(classDef).split('::').pop();
-			var toggle:LinkableBoolean = toolToggles.getObject(className) as LinkableBoolean;
-			if (!toggle)
-			{
-				toggle = toolToggles.requestObject(className, LinkableBoolean, true);
+			var existsPreviously:Boolean = toolToggles.getObject(className) is LinkableBoolean;
+			var toggle:LinkableBoolean = toolToggles.requestObject(className, LinkableBoolean, true); // lock
+			if (!existsPreviously)
 				toggle.value = true; // default value
-			}
 			return toggle;
 		}
 
@@ -327,6 +328,7 @@ package weave
 		public const enableAddWeaveDataSource:LinkableBoolean = new LinkableBoolean(true); // enable/disable Add WeaveDataSource option
 		
 		
+		public const enableWeaveAnalystMode:LinkableBoolean = new LinkableBoolean(false);// enable/disable use of the Weave Analyst
 		public const dashboardMode:LinkableBoolean = new LinkableBoolean(false);	 // enable/disable borders/titleBar on windows
 		public const enableToolControls:LinkableBoolean = new LinkableBoolean(true); // enable tool controls (which enables attribute selector too)
 		public const enableAxisToolTips:LinkableBoolean = new LinkableBoolean(true);
@@ -373,8 +375,7 @@ package weave
 			if (csv === null) 
 				return false;
 			
-			var parser:CSVParser = new CSVParser();
-			var rows:Array = parser.parseCSV(csv);
+			var rows:Array = WeaveAPI.CSVParser.parseCSV(csv);
 			
 			if (rows.length == 0)
 				return false;
@@ -433,6 +434,7 @@ package weave
 		
 		public const enableProbeLines:LinkableBoolean = new LinkableBoolean(true);
 		public function get enableProbeToolTip():LinkableBoolean { return ProbeTextUtils.enableProbeToolTip; }
+		public function get showEmptyProbeRecordIdentifiers():LinkableBoolean { return ProbeTextUtils.showEmptyProbeRecordIdentifiers; }
 
 		public const toolInteractions:InteractionController = new InteractionController();
 		
@@ -592,7 +594,6 @@ package weave
 		[Deprecated(replacement="getToolToggle")] public function set enableAddGaugeTool(value:Boolean):void { _toggleToolsMenuItem("GaugeTool", value); }
 		[Deprecated(replacement="getToolToggle")] public function set enableAddHistogram(value:Boolean):void { _toggleToolsMenuItem("HistogramTool", value); }
 		[Deprecated(replacement="getToolToggle")] public function set enableAdd2DHistogram(value:Boolean):void { _toggleToolsMenuItem("Histogram2DTool", value); }
-		[Deprecated(replacement="getToolToggle")] public function set enableAddGraphTool(value:Boolean):void { _toggleToolsMenuItem("GraphTool", value); }
 		[Deprecated(replacement="getToolToggle")] public function set enableAddLineChart(value:Boolean):void { _toggleToolsMenuItem("LineChartTool", value); }
 		[Deprecated(replacement="getToolToggle")] public function set enableAddDimensionSliderTool(value:Boolean):void { _toggleToolsMenuItem("DimensionSliderTool", value); }
 		[Deprecated(replacement="getToolToggle")] public function set enableAddMap(value:Boolean):void { _toggleToolsMenuItem("MapTool", value); }

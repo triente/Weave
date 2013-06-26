@@ -22,6 +22,7 @@ package weave.ui
 	import flash.display.DisplayObject;
 	import flash.display.Graphics;
 	import flash.events.ContextMenuEvent;
+	import flash.events.KeyboardEvent;
 	import flash.events.MouseEvent;
 	import flash.geom.Point;
 	import flash.ui.ContextMenu;
@@ -35,15 +36,17 @@ package weave.ui
 	
 	import weave.api.WeaveAPI;
 	import weave.api.core.IDisposableObject;
-	import weave.api.ui.ILinkableContainer;
 	import weave.api.core.ILinkableObject;
+	import weave.api.core.IStageUtils;
 	import weave.api.data.IQualifiedKey;
 	import weave.api.getCallbackCollection;
 	import weave.api.primitives.IBounds2D;
 	import weave.api.registerLinkableChild;
+	import weave.api.ui.ILinkableContainer;
 	import weave.core.LinkableNumber;
 	import weave.core.LinkableString;
 	import weave.primitives.Bounds2D;
+	import weave.primitives.GeometryType;
 	import weave.primitives.SimpleGeometry;
 	import weave.utils.CustomCursorManager;
 	import weave.utils.SpatialIndex;
@@ -71,6 +74,7 @@ package weave.ui
 			addEventListener(MouseEvent.MOUSE_OUT, handleRollOut);
 			// add local event listener for mouse down. local rather than global because we don't care if mouse was pressed elsewhere
 			addEventListener(MouseEvent.MOUSE_DOWN, handleMouseDown);
+			addEventListener(MouseEvent.CLICK, handleMouseDown);
 
 			addEventListener(FlexEvent.CREATION_COMPLETE, handleCreationComplete);
 
@@ -79,6 +83,7 @@ package weave.ui
 			addEventListener(MouseEvent.DOUBLE_CLICK, handleDoubleClick);
 			
 			// add global event listener for mouse move and mouse up because user may move or release outside this display object
+			WeaveAPI.StageUtils.addEventCallback(KeyboardEvent.KEY_DOWN, this, handleKeyboard);
 			WeaveAPI.StageUtils.addEventCallback(MouseEvent.MOUSE_MOVE, this, handleMouseMove);
 			WeaveAPI.StageUtils.addEventCallback(MouseEvent.MOUSE_UP, this, handleMouseUp);
  
@@ -301,11 +306,22 @@ package weave.ui
 		 */
 		private function handleMouseDown(event:MouseEvent):void
 		{
-			var line:Array;
-
 			if (!_editMode)// || mouseOffscreen())
 				return;
 			
+			if (drawingMode.value == POLYGON_DRAW_MODE)
+			{
+				if (!WeaveAPI.StageUtils.pointClicked)
+					return;
+			}
+			else
+			{
+				if (event.type == MouseEvent.CLICK)
+					return;
+			}
+			
+			var line:Array;
+
 			// project the point to data coordinates
 			handleScreenCoordinate(mouseX, mouseY, _tempPoint);
 			
@@ -366,15 +382,23 @@ package weave.ui
 			}
 		}
 		
+		private function toggleMouseEnabled():void
+		{
+			var keyPressed:Boolean = WeaveAPI.StageUtils.altKey || WeaveAPI.StageUtils.ctrlKey || WeaveAPI.StageUtils.shiftKey;
+			if (mouseEnabled == keyPressed)
+				mouseEnabled = !keyPressed;
+		}
+		
 		/**
 		 * Handle the mouse release event. 
 		 */		
 		private function handleMouseUp():void
 		{
-			
 			if (!_editMode)// || mouseOffscreen())
 				return;
 
+			toggleMouseEnabled();
+			
 			if (drawingMode.value == FREE_DRAW_MODE)
 			{
 				_drawing = false;
@@ -394,12 +418,23 @@ package weave.ui
 			invalidateDisplayList();
 		}
 		
+		private function handleKeyboard():void
+		{
+			if (editMode)
+				toggleMouseEnabled();
+		}
+		
 		/**
 		 * Handle a mouse move event. 
-		 */		
+		 */
 		private function handleMouseMove():void
 		{
-			if (_drawing && editMode)// && !mouseOffscreen())
+			if (!editMode)
+				return;
+			
+			toggleMouseEnabled();
+			
+			if (_drawing)// && !mouseOffscreen())
 			{
 				// get the current line
 				var line:Array = _coordsArrays[_coordsArrays.length - 1];
@@ -412,10 +447,10 @@ package weave.ui
 					line.push(_tempPoint.x, _tempPoint.y);
 					coords.value += _tempPoint.x + "," + _tempPoint.y + ",";
 				}
+				
+				// redraw
+				invalidateDisplayList();
 			}
-			
-			// redraw
-			invalidateDisplayList();
 		}
 		
 		/**
@@ -596,7 +631,7 @@ package weave.ui
 		}
 				
 		private const _tempArray:Array = [];
-		private const _simpleGeom:SimpleGeometry = new SimpleGeometry(SimpleGeometry.CLOSED_POLYGON);
+		private const _simpleGeom:SimpleGeometry = new SimpleGeometry(GeometryType.POLYGON);
 		private const _tempScreenBounds:IBounds2D = new Bounds2D();
 		private const _tempDataBounds:IBounds2D = new Bounds2D();
 		private const _tempPoint:Point = new Point();
@@ -614,9 +649,9 @@ package weave.ui
 		private static const REMOVE_DRAWINGS:String = lang("Remove All Drawings");
 		private static const CHANGE_DRAWING_MODE:String = lang("Change Drawing Mode");
 		private static const PEN_OBJECT_NAME:String = "penTool";
-		public static const FREE_DRAW_MODE:String = lang("Free Draw Mode");
-		public static const POLYGON_DRAW_MODE:String = lang("Polygon Draw Mode");
-		private static const SELECT_RECORDS:String = lang("Select Records in Polygon");
+		public static const FREE_DRAW_MODE:String = "Free Draw Mode";
+		public static const POLYGON_DRAW_MODE:String = "Polygon Draw Mode";
+		private static const SELECT_RECORDS:String = "Select Records in Polygon";
 		private static const _menuGroupName:String = "9 drawingMenuitems";
 		public static function createContextMenuItems(destination:DisplayObject):Boolean
 		{

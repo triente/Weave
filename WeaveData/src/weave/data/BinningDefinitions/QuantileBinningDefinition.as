@@ -22,7 +22,6 @@ package weave.data.BinningDefinitions
 	import mx.utils.ObjectUtil;
 	
 	import weave.api.WeaveAPI;
-	import weave.api.core.ILinkableHashMap;
 	import weave.api.data.IAttributeColumn;
 	import weave.api.data.IColumnStatistics;
 	import weave.api.data.IPrimitiveColumn;
@@ -53,14 +52,13 @@ package weave.data.BinningDefinitions
 		 * @param column 
 		 * @param output
 		 */
-		override public function getBinClassifiersForColumn(column:IAttributeColumn, output:ILinkableHashMap):void
+		override public function generateBinClassifiersForColumn(column:IAttributeColumn):void
 		{
 			var name:String;
 			// clear any existing bin classifiers
 			output.removeAllObjects();
 			
 			var stats:IColumnStatistics = WeaveAPI.StatisticsCache.getColumnStatistics(column);
-			_statsJuggler.target = stats;
 			var dataMin:Number = stats.getMin();
 			var dataMax:Number = stats.getMax();
 			var sortedColumn:Array = getSortedColumn(column); 
@@ -97,14 +95,15 @@ package weave.data.BinningDefinitions
 					name = tempNumberClassifier.generateBinLabel(column as IPrimitiveColumn);
 				output.requestObjectCopy(name, tempNumberClassifier);
 			}
+			
+			// trigger callbacks now because we're done updating the output
+			asyncResultCallbacks.triggerCallbacks();
 		}
 		
 		// reusable temporary object
 		private static const tempNumberClassifier:NumberClassifier = new NumberClassifier();
 		
 		//variables for getSortedColumn method
-		private var _sortedColumn:Array;
-		private var keys:Array;
 		
 		/**
 		 * getSortedColumn 
@@ -113,14 +112,16 @@ package weave.data.BinningDefinitions
 		 */
 		private function getSortedColumn(column:IAttributeColumn):Array
 		{
-			keys = column ? column.keys : [];
-			_sortedColumn = new Array(keys.length);
+			var keys:Array = column ? column.keys : [];
+			var _sortedColumn:Array = new Array(keys.length);
 			var i:uint = 0;
 			for each (var key:IQualifiedKey in keys)	
 			{
-				_sortedColumn[i] = column.getValueFromKey(key,Number);
-				i = i+1;
+				var n:Number = column.getValueFromKey(key,Number);
+				if (isFinite(n))
+					_sortedColumn[i++] = n;
 			}
+			_sortedColumn.length = i;
 			AsyncSort.sortImmediately(_sortedColumn, ObjectUtil.numericCompare);
 			return _sortedColumn;
 		}

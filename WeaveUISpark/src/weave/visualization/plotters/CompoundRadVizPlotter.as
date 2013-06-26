@@ -31,6 +31,7 @@ package weave.visualization.plotters
 	import weave.api.data.IColumnStatistics;
 	import weave.api.data.IQualifiedKey;
 	import weave.api.getCallbackCollection;
+	import weave.api.linkableObjectIsBusy;
 	import weave.api.newLinkableChild;
 	import weave.api.primitives.IBounds2D;
 	import weave.api.radviz.ILayoutAlgorithm;
@@ -76,7 +77,7 @@ package weave.visualization.plotters
 			algorithms[BRUTE_FORCE] = BruteForceLayoutAlgorithm;
 			
 			columns.childListCallbacks.addImmediateCallback(this, handleColumnsListChange);
-			getCallbackCollection(keySet).addImmediateCallback(this, handleColumnsChange, true);
+			getCallbackCollection(filteredKeySet).addImmediateCallback(this, handleColumnsChange, true);
 			getCallbackCollection(this).addImmediateCallback(this, clearCoordCache);
 		}
 		private function handleColumnsListChange():void
@@ -129,7 +130,10 @@ package weave.visualization.plotters
 		private const _currentScreenBounds:Bounds2D = new Bounds2D();
 		
 		private function handleColumnsChange():void
-		{			
+		{
+			if (linkableObjectIsBusy(columns) || linkableObjectIsBusy(spatialCallbacks))
+				return;
+			
 			var i:int = 0;
 			var keyNormArray:Array;
 			var columnNormArray:Array;
@@ -152,7 +156,7 @@ package weave.visualization.plotters
 				keySources.unshift(radiusColumn);
 				setColumnKeySources(keySources, [true]);
 			
-				for each( var key:IQualifiedKey in keySet.keys)
+				for each( var key:IQualifiedKey in filteredKeySet.keys)
 				{					
 					randomArrayIndexMap[key] = i ;										
 					var magnitude:Number = 0;
@@ -181,7 +185,7 @@ package weave.visualization.plotters
 					i++
 				}
 				
-				for each( var k:IQualifiedKey in keySet.keys)
+				for each( var k:IQualifiedKey in filteredKeySet.keys)
 				{
 					keyNormArray = [];
 					i = 0;
@@ -442,27 +446,25 @@ package weave.visualization.plotters
 		 * 
 		 * This function returns a Bounds2D object set to the data bounds associated with the given record key.
 		 * @param key The key of a data record.
-		 * @param outputDataBounds A Bounds2D object to store the result in.
-		 * @return An Array of Bounds2D objects that make up the bounds for the record.
+		 * @param output An Array of IBounds2D objects to store the result in.
 		 */
-		override public function getDataBoundsFromRecordKey(recordKey:IQualifiedKey):Array
+		override public function getDataBoundsFromRecordKey(recordKey:IQualifiedKey, output:Array):void
 		{
+			initBoundsArray(output);
 			_columns = columns.getObjects(IAttributeColumn);
 			//if(!unorderedColumns.length) handleColumnsChange();
 			getXYcoordinates(recordKey);
 			
-			var bounds:IBounds2D = getReusableBounds();
-			bounds.includePoint(coordinate);
-			return [bounds];
+			(output[0] as IBounds2D).includePoint(coordinate);
 		}
 		
 		/**
 		 * This function returns a Bounds2D object set to the data bounds associated with the background.
 		 * @return A Bounds2D object specifying the background data bounds.
 		 */
-		override public function getBackgroundDataBounds():IBounds2D
+		override public function getBackgroundDataBounds(output:IBounds2D):void
 		{
-			return getReusableBounds(-1, -1.1, 1, 1.1);
+			return output.setBounds(-1, -1.1, 1, 1.1);
 		}		
 		
 		public var drawProbe:Boolean = false;
@@ -479,7 +481,7 @@ package weave.visualization.plotters
 			var graphics:Graphics = destination;
 			graphics.clear();
 			if(probedKeys.length)
-				if(probedKeys[0].keyType != keySet.keys[0].keyType) return;
+				if(probedKeys[0].keyType != filteredKeySet.keys[0].keyType) return;
 			
 			for each( var key:IQualifiedKey in probedKeys)
 			{

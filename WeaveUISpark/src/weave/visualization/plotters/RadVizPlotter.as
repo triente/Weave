@@ -25,13 +25,17 @@ package weave.visualization.plotters
 	import flash.geom.Point;
 	import flash.utils.Dictionary;
 	
+	import mx.controls.Alert;
+	
 	import weave.Weave;
 	import weave.api.WeaveAPI;
+	import weave.api.copySessionState;
 	import weave.api.data.IAttributeColumn;
 	import weave.api.data.IColumnStatistics;
 	import weave.api.data.IQualifiedKey;
 	import weave.api.disposeObjects;
 	import weave.api.getCallbackCollection;
+	import weave.api.linkableObjectIsBusy;
 	import weave.api.newLinkableChild;
 	import weave.api.primitives.IBounds2D;
 	import weave.api.radviz.ILayoutAlgorithm;
@@ -44,6 +48,7 @@ package weave.visualization.plotters
 	import weave.core.LinkableString;
 	import weave.data.AttributeColumns.AlwaysDefinedColumn;
 	import weave.data.AttributeColumns.DynamicColumn;
+	import weave.data.DataSources.CSVDataSource;
 	import weave.primitives.Bounds2D;
 	import weave.primitives.ColorRamp;
 	import weave.radviz.BruteForceLayoutAlgorithm;
@@ -74,8 +79,9 @@ package weave.visualization.plotters
 			algorithms[INCREMENTAL_LAYOUT] = IncrementalLayoutAlgorithm;
 			algorithms[BRUTE_FORCE] = BruteForceLayoutAlgorithm;
 			columns.childListCallbacks.addImmediateCallback(this, handleColumnsListChange);
-			getCallbackCollection(keySet).addImmediateCallback(this, handleColumnsChange, true);
+			getCallbackCollection(filteredKeySet).addGroupedCallback(this, handleColumnsChange, true);
 			getCallbackCollection(this).addImmediateCallback(this, clearCoordCache);
+			columns.addGroupedCallback(this, handleColumnsChange);
 		}
 		private function handleColumnsListChange():void
 		{
@@ -87,7 +93,9 @@ package weave.visualization.plotters
 				anchors.requestObject(newColumnName, AnchorPoint, false);
 				// When a new column is created, register the stats to trigger callbacks and affect busy status.
 				// This will be cleaned up automatically when the column is disposed.
-				registerSpatialProperty(WeaveAPI.StatisticsCache.getColumnStatistics(newColumn), handleColumnsChange);
+				var stats:IColumnStatistics = WeaveAPI.StatisticsCache.getColumnStatistics(newColumn);
+				registerSpatialProperty(stats)
+				getCallbackCollection(stats).addGroupedCallback(this, handleColumnsChange);
 			}
 			var oldColumnName:String = columns.childListCallbacks.lastNameRemoved;
 			if(oldColumnName != null)
@@ -97,7 +105,7 @@ package weave.visualization.plotters
 			}
 		}
 		
-		public const columns:LinkableHashMap = registerSpatialProperty(new LinkableHashMap(IAttributeColumn), handleColumnsChange);
+		public const columns:LinkableHashMap = registerSpatialProperty(new LinkableHashMap(IAttributeColumn));
 		public const localNormalization:LinkableBoolean = registerSpatialProperty(new LinkableBoolean(true));
 		
 		/**
@@ -117,8 +125,7 @@ package weave.visualization.plotters
 		public function get alphaColumn():AlwaysDefinedColumn { return fillStyle.alpha; }
 		public const colorMap:ColorRamp = registerLinkableChild(this, new ColorRamp(ColorRamp.getColorRampXMLByName("Doppler Radar"))) ;		
 		
-		public var doCDLayout:Boolean = false;
-		public var LayoutClasses:Dictionary = null;
+		public var LayoutClasses:Dictionary = null;//(Set via the editor) needed for setting the Cd layout dimensional anchor  locations
 		
 
 		/**
@@ -139,6 +146,9 @@ package weave.visualization.plotters
 		
 		private function handleColumnsChange():void
 		{
+			if (linkableObjectIsBusy(columns) || linkableObjectIsBusy(spatialCallbacks))
+				return;
+			
 			var i:int = 0;
 			var keyNormArray:Array;
 			var columnNormArray:Array;
@@ -146,7 +156,7 @@ package weave.visualization.plotters
 			var columnNumberArray:Array;
 			var sum:Number = 0;
 			
-			randomArrayIndexMap = 	new Dictionary(true);				
+			randomArrayIndexMap = 	new Dictionary(true);
 			var keyMaxMap:Dictionary = new Dictionary(true);
 			var keyMinMap:Dictionary = new Dictionary(true);
 			keyNormMap = 			new Dictionary(true);
@@ -163,7 +173,7 @@ package weave.visualization.plotters
 				keySources.unshift(radiusColumn);
 				setColumnKeySources(keySources, [true]);
 			
-				for each( var key:IQualifiedKey in keySet.keys)
+				for each( var key:IQualifiedKey in filteredKeySet.keys)
 				{					
 					randomArrayIndexMap[key] = i ;										
 					var magnitude:Number = 0;
@@ -192,7 +202,7 @@ package weave.visualization.plotters
 					i++
 				}
 				
-				for each( var k:IQualifiedKey in keySet.keys)
+				for each( var k:IQualifiedKey in filteredKeySet.keys)
 				{
 					keyNormArray = [];
 					i = 0;
@@ -213,7 +223,32 @@ package weave.visualization.plotters
 			setAnchorLocations();
 		}
 	
-	
+		public function setclassDiscriminationMetric(tandpMapping:Dictionary,tandpValuesMapping:Dictionary):void
+		{
+			var anchorObjects:Array = anchors.getObjects(AnchorPoint);
+			var anchorNames:Array = anchors.getNames(AnchorPoint);
+			for(var type:Object in tandpMapping)
+			{
+				var colNamesArray:Array = tandpMapping[type];
+				var colValuesArray:Array = tandpValuesMapping[type+"metricvalues"];
+				for(var n:int = 0; n < anchorNames.length; n++)//looping through all columns
+				{
+					var tempAnchorName:String = anchorNames[n];
+					for(var c:int =0; c < colNamesArray.length; c++)
+					{
+						if(tempAnchorName == colNamesArray[c])
+						{
+							var tempAnchor:AnchorPoint = (anchors.getObject(tempAnchorName)) as AnchorPoint;
+							tempAnchor.classDiscriminationMetric.value = colValuesArray[c];
+							tempAnchor.classType.value = String(type);
+						}
+							
+					}
+				}
+				
+			}
+			
+		}
 		public function setAnchorLocations( ):void
 		{	
 			var _columns:Array = columns.getObjects();
@@ -256,7 +291,6 @@ package weave.visualization.plotters
 				var currentClassPos:Number = classTheta * classIncrementor;
 				var columnIncrementor:int = 1;//change
 				
-				
 				for( var g :int = 0; g < colNames.length; g++)//change
 				{
 					cdAnchor = anchors.getObject(colNames[g]) as AnchorPoint;
@@ -265,7 +299,6 @@ package weave.visualization.plotters
 					cdAnchor.title.value = ColumnUtils.getTitle(columns.getObject(colNames[g]) as IAttributeColumn);
 					columnIncrementor++;//change
 				}
-				
 				
 				classIncrementor++;
 			}
@@ -284,14 +317,13 @@ package weave.visualization.plotters
 		/**
 		 * Applies the RadViz algorithm to a record specified by a recordKey
 		 */
-		private function getXYcoordinates(recordKey:IQualifiedKey):Number
+		private function getXYcoordinates(recordKey:IQualifiedKey):void
 		{
 			var cached:Array = coordCache[recordKey] as Array;
 			if (cached)
 			{
 				coordinate.x = cached[0];
 				coordinate.y = cached[1];
-				return cached[2];
 			}
 			
 			//implements RadViz algorithm for x and y coordinates of a record
@@ -301,30 +333,28 @@ package weave.visualization.plotters
 			
 			var anchorArray:Array = anchors.getObjects();			
 			
-			var sum:Number = 0;			
 			var value:Number = 0;			
 			var name:String;
-			var keyMapExists:Boolean = true;
 			var anchor:AnchorPoint;
-			var array:Array = (localNormalization.value) ? keyNormMap[recordKey] : keyGlobalNormMap[recordKey];
-			if(!array) keyMapExists = false;
-			var array2:Dictionary = keyNumberMap[recordKey];
-			var i:int = 0;
-			for each( var column:IAttributeColumn in columns.getObjects())
+			var normArray:Array = (localNormalization.value) ? keyNormMap[recordKey] : keyGlobalNormMap[recordKey];
+			var _cols:Array = columns.getObjects();
+			for (var i:int = 0; i < _cols.length; i++)
 			{
+				var column:IAttributeColumn = _cols[i];
 				var stats:IColumnStatistics = WeaveAPI.StatisticsCache.getColumnStatistics(column);
-				value = (keyMapExists) ? array[i] : stats.getNorm(recordKey);
-				name = (keyMapExists) ? columnTitleMap[column] : columns.getName(column);	
-				sum += (keyMapExists) ? array2[column] : column.getValueFromKey(recordKey, Number);
+				value = normArray ? normArray[i] : stats.getNorm(recordKey);
+				if (isNaN(value))
+					continue;
+				
+				name = normArray ? columnTitleMap[column] : columns.getName(column);
 				anchor = anchors.getObject(name) as AnchorPoint;
 				numeratorX += value * anchor.x.value;
 				numeratorY += value * anchor.y.value;						
 				denominator += value;
-				i++ ;
 			}
 			if(denominator==0) 
 			{
-				denominator = .00001;
+				denominator = 1;
 			}
 			coordinate.x = (numeratorX/denominator);
 			coordinate.y = (numeratorY/denominator);
@@ -332,9 +362,7 @@ package weave.visualization.plotters
 			if( enableJitter.value )
 				jitterRecords(recordKey);
 			
-			coordCache[recordKey] = [coordinate.x, coordinate.y, sum];
-			
-			return sum;
+			coordCache[recordKey] = [coordinate.x, coordinate.y];
 		}
 		
 		private function jitterRecords(recordKey:IQualifiedKey):void
@@ -458,27 +486,24 @@ package weave.visualization.plotters
 		 * 
 		 * This function returns a Bounds2D object set to the data bounds associated with the given record key.
 		 * @param key The key of a data record.
-		 * @param outputDataBounds A Bounds2D object to store the result in.
-		 * @return An Array of Bounds2D objects that make up the bounds for the record.
+		 * @param output An Array of IBounds2D objects to store the result in.
 		 */
-		override public function getDataBoundsFromRecordKey(recordKey:IQualifiedKey):Array
+		override public function getDataBoundsFromRecordKey(recordKey:IQualifiedKey, output:Array):void
 		{
 			//_columns = columns.getObjects(IAttributeColumn);
 			//if(!unorderedColumns.length) handleColumnsChange();
 			getXYcoordinates(recordKey);
 			
-			var bounds:IBounds2D = getReusableBounds();
-			bounds.includePoint(coordinate);
-			return [bounds];
+			initBoundsArray(output).includePoint(coordinate);
 		}
 		
 		/**
 		 * This function returns a Bounds2D object set to the data bounds associated with the background.
-		 * @return A Bounds2D object specifying the background data bounds.
+		 * @param An IBounds2D object used to store the background data bounds.
 		 */
-		override public function getBackgroundDataBounds():IBounds2D
+		override public function getBackgroundDataBounds(output:IBounds2D):void
 		{
-			return getReusableBounds(-1, -1.1, 1, 1.1);
+			output.setBounds(-1, -1.1, 1, 1.1);
 		}		
 		
 		public var drawProbe:Boolean = false;
@@ -494,8 +519,8 @@ package weave.visualization.plotters
 			} catch(e:Error) {return;}
 			var graphics:Graphics = destination;
 			graphics.clear();
-			if(probedKeys.length && keySet.keys.length)
-				if(probedKeys[0].keyType != keySet.keys[0].keyType) return;
+			if(probedKeys.length && filteredKeySet.keys.length)
+				if(probedKeys[0].keyType != filteredKeySet.keys[0].keyType) return;
 			
 			for each( var key:IQualifiedKey in probedKeys)
 			{
@@ -529,6 +554,143 @@ package weave.visualization.plotters
 			var array:Array = _algorithm.run(columns.getObjects(IAttributeColumn), keyNumberMap);
 			
 			RadVizUtils.reorderColumns(columns, array);
+		}
+		
+		[Bindable] public var listOfCsvData:Array = WeaveAPI.globalHashMap.getNames(CSVDataSource);
+		public var sampleTitle:LinkableString = registerLinkableChild(this, new LinkableString(""));
+		public var dataSetName:LinkableString = registerLinkableChild(this, new LinkableString(listOfCsvData[0]));
+		public var regularSampling:LinkableBoolean = registerLinkableChild(this, new LinkableBoolean(true));
+		public var RSampling:LinkableBoolean = registerLinkableChild(this, new LinkableBoolean(false));
+		public var sampleSizeRows:LinkableNumber = registerLinkableChild(this, new LinkableNumber(300));
+		public var sampleSizeColumns:LinkableNumber = registerLinkableChild(this, new LinkableNumber(20));
+		public function sampleDataSet():void
+		{
+			// we use the CSVDataSource so we can get the rows.
+			var originalCSVDataSource:CSVDataSource = WeaveAPI.globalHashMap.getObject(dataSetName.value) as CSVDataSource;
+			var randomIndex:int = 0; // random index to randomly pick a row.
+			var i:int; // used to iterate over the data.
+			var originalArray:Array = [];
+			var sampledArray:Array = [];
+			var transposedSampledArray:Array = [];
+			var col:int;
+			var row:int;
+			
+			if (regularSampling.value && !RSampling.value) // sampling done in actionscript
+			{
+				// rows first
+				if (originalCSVDataSource)
+				{
+					originalArray = originalCSVDataSource.getCSVData().slice(0); // slice to get a copy. otherwise we modify the original array.				
+				} 
+				else
+				{
+					Alert.show(lang("No data found."))
+					return;
+				}
+				if (originalArray.length < sampleSizeRows.value)
+				{
+					sampledArray = originalArray; // sample size is bigger than the data set.
+					Alert.show(lang("Data sampled successfully."))
+				}
+				else // sampling begins here
+				{
+					var titleRow:Array = originalArray.shift(); // throwing the column names first row.
+					i = sampleSizeRows.value; // we need to reduce this number by one because the title row already accounts for a row
+					var length:int = originalArray.length;
+					while( i != 0 )
+					{
+						randomIndex = int(Math.random() * (length));
+						sampledArray.push(originalArray[randomIndex]);
+						originalArray.splice(randomIndex, 1);
+						length--;
+						i--;
+					}
+					sampledArray.unshift(titleRow); // we put the title row back here..
+					originalArray.splice(0); // we clear this array since we don't need it anymore.
+					// Sampling is done. we wrap it back into a CSVDataSource
+					
+					
+					transposedSampledArray = transposeDataArray(sampledArray);
+					var firstColumn:Array = transposedSampledArray.shift(); // assumed to be the Id column
+					var secondColumn:Array = transposedSampledArray.shift(); // assumed to be the class column
+					
+					// proceed as above with a transposed csv... not sure if there is a better way to do this.
+					if (transposedSampledArray.length < sampleSizeColumns.value - 2)
+					{
+						sampledArray = transposeDataArray(transposedSampledArray); // sample size is bigger than the data set.
+					}
+					else // column sampling begins here
+					{
+						i = sampleSizeColumns.value - 2; // we need to reduce this number by one because the title row already accounts for a row
+						length = transposedSampledArray.length; // accounted for the first two columns removed.
+						sampledArray = []; // making this sampled array reusable
+						while( i != 0 )
+						{
+							randomIndex = int(Math.random() * (length));
+							sampledArray.push(transposedSampledArray[randomIndex]);
+							transposedSampledArray.splice(randomIndex, 1);
+							length--;
+							i--;
+						}
+						transposedSampledArray.splice(0);
+						sampledArray.unshift(secondColumn);
+						sampledArray.unshift(firstColumn);
+						var temp:Array = sampledArray; // quick older for the sample array to be transposed again
+						sampledArray = transposeDataArray(temp); // at this stage we should have a complete row and column sample
+					}
+					
+					// begin saving the CSVDataSource.
+					if (sampleTitle.value == "" || sampleTitle.value == "optional")
+					{
+						sampleTitle.value = Weave.root.generateUniqueName("Sampled " + WeaveAPI.globalHashMap.getName(originalCSVDataSource));
+					}
+					var sampledCSVDataSource:CSVDataSource = WeaveAPI.globalHashMap.requestObject(sampleTitle.value, CSVDataSource, false);
+					sampledCSVDataSource.setCSVData(sampledArray);
+					sampledCSVDataSource.keyType.value = originalCSVDataSource.keyType.value;
+					Alert.show(lang("Data sampled successfully"));
+					sampleTitle.value = "";
+				} 
+			}
+			
+			else // Rsampling
+			{
+				// TODO
+				// R documentation says to pass it a vector (2 dimensional?)
+				// sample(x, size, replace = FALSE, prob = NULL)
+				//
+				// arguments
+				// x       Vector of one or more elements
+				// size    The sample size
+				// replace Should sampling be done with replacement
+				// prob    vector of probability weights (should be null for random sampling)
+			}
+			return;			
+		}
+		
+		/**
+		 * @param array must be two dimensional array
+		 * 
+		 * @return transposed array
+		 **/
+		
+		private function transposeDataArray (array:Array):Array
+		{
+			var i:int = 0;
+			var j:int = 0;
+			if(array)
+				var rowLength:int = array.length;
+			if (array[0])
+				var colLength:int = array[0].length;	
+	
+			var transposed:Array = new Array(colLength);
+			
+			for (i = 0; i < colLength; i++)
+			{
+				transposed[i] = new Array(rowLength);
+				for (j = 0; j < rowLength; j++)
+					transposed[i][j] = array[j][i];
+			}
+			return transposed;
 		}
 		
 		private var _algorithm:ILayoutAlgorithm = newSpatialProperty(GreedyLayoutAlgorithm);

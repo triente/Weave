@@ -38,6 +38,7 @@ package weave.services.wms
 	import flash.display.Bitmap;
 	import flash.net.URLRequest;
 	import flash.system.Security;
+	import flash.utils.Dictionary;
 	
 	import mx.rpc.events.FaultEvent;
 	import mx.rpc.events.ResultEvent;
@@ -52,6 +53,8 @@ package weave.services.wms
 	import weave.api.reportError;
 	import weave.api.services.IWMSService;
 	import weave.core.ErrorManager;
+	import weave.core.LinkableString;
+	import weave.data.ProjectionManager;
 	import weave.primitives.Bounds2D;
 	import weave.utils.AsyncSort;
 
@@ -61,14 +64,21 @@ package weave.services.wms
 	 * 
 	 * @author kmonico
 	 */
-	public class ModestMapsWMS extends AbstractWMS implements IWMSService
+	public class ModestMapsWMS extends AbstractWMS
 	{
 		public function ModestMapsWMS()
 		{
 			_srs = IMAGE_PROJECTION_SRS; 
 
-			_tempBounds.copyFrom(_worldBoundsMercator);
+			ProjectionManager.getMercatorTileBoundsInLatLong(_tempBounds);
 			setReprojectedBounds(_tempBounds, _worldBoundsMercator, _tileProjectionSRS, _srs); // get world bounds in our Mercator
+		}
+		
+		public const providerName:LinkableString = registerLinkableChild(this,new LinkableString(),handleProviderName);
+		
+		private function handleProviderName():void
+		{
+			setProvider(providerName.value);
 		}
 		
 		override public function setProvider(provider:String):void
@@ -88,24 +98,31 @@ package weave.services.wms
 					break;*/
 				case WMSProviders.BLUE_MARBLE_MAP:
 					_mapProvider = new BlueMarbleMapProvider();
+					providerName.value = WMSProviders.BLUE_MARBLE_MAP; 
 					break;
 				case WMSProviders.OPEN_STREET_MAP:
 					_mapProvider = new OpenStreetMapProvider();
+					providerName.value = WMSProviders.OPEN_STREET_MAP; 
 					break;
 				case WMSProviders.MAPQUEST:
 					_mapProvider = new OpenMapQuestProvider();
+					providerName.value = WMSProviders.MAPQUEST; 
 					break;
 				case WMSProviders.MAPQUEST_AERIAL:
 					_mapProvider = new OpenMapQuestAerialProvider();
+					providerName.value = WMSProviders.MAPQUEST_AERIAL; 
 					break;
 				case WMSProviders.STAMEN_TONER:
 					_mapProvider = new StamenProvider(StamenProvider.STYLE_TONER);
+					providerName.value = WMSProviders.STAMEN_TONER; 
 					break;
 				case WMSProviders.STAMEN_TERRAIN:
 					_mapProvider = new StamenProvider(StamenProvider.STYLE_TERRAIN);
+					providerName.value = WMSProviders.STAMEN_TERRAIN; 
 					break;
 				case WMSProviders.STAMEN_WATERCOLOR:
 					_mapProvider = new StamenProvider(StamenProvider.STYLE_WATERCOLOR);
+					providerName.value = WMSProviders.STAMEN_WATERCOLOR; 
 					break;
 				default:
 					reportError("Attempt to set invalid map provider.");
@@ -116,6 +133,7 @@ package weave.services.wms
 			_imageWidth = _mapProvider.tileWidth;
 			_imageHeight = _mapProvider.tileHeight;
 			_currentTileIndex = new WMSTileIndex();
+			_urlToTile = new Dictionary();	
 			getCallbackCollection(this).triggerCallbacks();
 		}
 		
@@ -134,11 +152,7 @@ package weave.services.wms
 		private var _imageHeight:int;
 		
 		// some parameters about the tiles
-		private const _minWorldLon:Number = -180.0 + ProjConstants.EPSLN; // because Proj4 wraps coordinates
-		private const _maxWorldLon:Number = 180.0 - ProjConstants.EPSLN; // because Proj4 wraps coordinates
-		private const _minWorldLat:Number = -Math.atan(ProjConstants.sinh(Math.PI)) * ProjConstants.R2D; 
-		private const _maxWorldLat:Number = Math.atan(ProjConstants.sinh(Math.PI)) * ProjConstants.R2D;
-		private const _worldBoundsMercator:IBounds2D = new Bounds2D(_minWorldLon, _minWorldLat, _maxWorldLon, _maxWorldLat);
+		private const _worldBoundsMercator:IBounds2D = new Bounds2D();
 		private const _tileProjectionSRS:String = "EPSG:4326"; // constant for modestMaps
 		
 		// reusable objects
@@ -438,9 +452,9 @@ package weave.services.wms
 			handleTileDownload(tile);
 		}
 		
-		override public function getAllowedBounds():IBounds2D
+		override public function getAllowedBounds(output:IBounds2D):void
 		{
-			return _worldBoundsMercator.cloneBounds(); 
+			return output.copyFrom(_worldBoundsMercator);
 		}
 		
 		/**

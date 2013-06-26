@@ -22,15 +22,11 @@ package weave.data.BinningDefinitions
 	import mx.utils.ObjectUtil;
 	
 	import weave.api.WeaveAPI;
-	import weave.api.core.ILinkableHashMap;
-	import weave.api.data.ColumnMetadata;
-	import weave.api.data.DataTypes;
 	import weave.api.data.IAttributeColumn;
-	import weave.api.data.IBinningDefinition;
 	import weave.api.data.IQualifiedKey;
+	import weave.core.SessionManager;
 	import weave.data.BinClassifiers.SingleValueClassifier;
 	import weave.utils.AsyncSort;
-	import weave.utils.ColumnUtils;
 
 	/**
 	 * Creates a separate bin for every string value in a column.
@@ -42,6 +38,7 @@ package weave.data.BinningDefinitions
 		public function CategoryBinningDefinition()
 		{
 			overrideBinNames.lock(); // no bin names allowed
+			(WeaveAPI.SessionManager as SessionManager).unregisterLinkableChild(this, overrideBinNames);
 		}
 		
 		/**
@@ -58,7 +55,7 @@ package weave.data.BinningDefinitions
 		/**
 		 * derive an explicit definition.
 		 */
-		override public function getBinClassifiersForColumn(column:IAttributeColumn, output:ILinkableHashMap):void
+		override public function generateBinClassifiersForColumn(column:IAttributeColumn):void
 		{
 			// clear any existing bin classifiers
 			output.removeAllObjects();
@@ -90,6 +87,9 @@ package weave.data.BinningDefinitions
 				var svc:SingleValueClassifier = output.requestObject(str, SingleValueClassifier, false);
 				svc.value = strArray[i];
 			}
+			
+			// trigger callbacks now because we're done updating the output
+			asyncResultCallbacks.triggerCallbacks();
 		}
 	}
 }

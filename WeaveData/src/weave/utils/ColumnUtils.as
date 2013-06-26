@@ -22,8 +22,6 @@ package weave.utils
 	import flash.geom.Point;
 	import flash.utils.Dictionary;
 	
-	import mx.utils.ObjectUtil;
-	
 	import weave.api.WeaveAPI;
 	import weave.api.core.ILinkableHashMap;
 	import weave.api.data.ColumnMetadata;
@@ -41,7 +39,6 @@ package weave.utils
 	import weave.core.LinkableHashMap;
 	import weave.data.AttributeColumns.DynamicColumn;
 	import weave.data.AttributeColumns.SecondaryKeyNumColumn;
-	import weave.data.QKeyManager;
 	import weave.primitives.BLGNode;
 	import weave.primitives.GeneralizedGeometry;
 	
@@ -53,7 +50,7 @@ package weave.utils
 	public class ColumnUtils
 	{
 		/**
-		 * This is a shortcut for column.getMetadata(AttributeColumnMetadata.TITLE).
+		 * This is a shortcut for column.getMetadata(ColumnMetadata.TITLE).
 		 * @param column A column to get the title of.
 		 * @return The title of the column.
 		 */		
@@ -188,19 +185,10 @@ package weave.utils
 		 * @param genericObjects An array of generic objects with <code>keyType</code>
 		 * and <code>localName</code> properties.
 		 * @return An array of IQualifiedKey objects.
-		 * 
-		 */		
-		public static function getQKeys(genericObjects:Array):Array
+		 */
+		[Deprecated(replacement="WeaveAPI.QKeyManager.mapQKeys()")] public static function getQKeys(genericObjects:Array):Array
 		{
-			var result:Array = [];
-			
-			for each (var key:Object in genericObjects)
-			{
-				var qkey:IQualifiedKey = getQKey(key);
-				result.push(qkey);
-			}
-
-			return result;
+			return WeaveAPI.QKeyManager.mapQKeys(genericObjects);
 		}
 			
 		/**
@@ -366,41 +354,44 @@ package weave.utils
 			return result;
 		}
 		
-		public static function generateTableCSV(attrCols:Array,keys:* = null,dataType:Class = null):String{
-			
-			
+		public static function generateTableCSV(attrCols:Array,keys:* = null,dataType:Class = null):String
+		{
 			SecondaryKeyNumColumn.allKeysHack = true; // dimension slider hack
 			
 			var records:Array = [];				
 			// get the list of column titles
-			//var attrCols:Array = getSelectableAttributes();
 			var definedAttrCols:Array = [];				
 			var columnTitles:Array = [];
 			var i:int;
-			for ( i = 0; i < attrCols.length; i++){
-				// to make sure only available attributes are added for export
-				if ((attrCols[i] is  IColumnWrapper) && (attrCols[i] as  IColumnWrapper).getInternalColumn()){
-					columnTitles.push(ColumnUtils.getTitle(attrCols[i]));
-					definedAttrCols.push(attrCols[i]);
-				}					
-				if (attrCols[i] is  LinkableHashMap)  {
-					var hashMapColumns:Array = (attrCols[i] as  LinkableHashMap).getObjects();
-					for (var j:int = 0; j < hashMapColumns.length; j++){
-						if ((hashMapColumns[j] as  IColumnWrapper).getInternalColumn()){
+			var item:*;
+			for (i = 0; i < attrCols.length; i++)
+			{
+				item = attrCols[i];
+				// to make sure undefined attributes are not exported
+				if ((item is IColumnWrapper) && (item as IColumnWrapper).getInternalColumn())
+				{
+					columnTitles.push(ColumnUtils.getTitle(item));
+					definedAttrCols.push(item);
+				}
+				if (item is LinkableHashMap)
+				{
+					var hashMapColumns:Array = (item as LinkableHashMap).getObjects();
+					for (var j:int = 0; j < hashMapColumns.length; j++)
+					{
+						if ((hashMapColumns[j] as  IColumnWrapper).getInternalColumn())
+						{
 							columnTitles.push(ColumnUtils.getTitle(hashMapColumns[j]));
 							definedAttrCols.push(hashMapColumns[j]);
 						}								
 					}
 				}
 			}
-			if(!keys){
+			if (!keys)
 				keys = getAllKeys(definedAttrCols);
-			}
 			
 			var keyTypeMap:Object = {};				
 			// create the data for each column in each selected row
-			//	var keys:* = _plotter.keySet.keys;
-			for each (var item:Object in keys)
+			for each (item in keys)
 			{
 				var key:IQualifiedKey = item as IQualifiedKey;
 				var record:Object = {};

@@ -287,7 +287,7 @@ package weave.data.DataSources
 			debug('getAttributeColumn', refCopy.getHashCode());
 			
 			var dcr:DelayedColumnRequest = new DelayedColumnRequest(refCopy, proxyColumn);
-			WeaveAPI.SessionManager.assignBusyTask(dcr, proxyColumn);
+			WeaveAPI.ProgressIndicator.addTask(dcr, proxyColumn);
 			handlePendingColumnRequest(dcr);
 			
 			return proxyColumn;
@@ -310,7 +310,7 @@ package weave.data.DataSources
 				debug('requestColumnFromSource', request.columnReference.getHashCode());
 				
 				WeaveAPI.StageUtils.callLater(request.proxyColumn, requestColumnFromSource, [request.columnReference, request.proxyColumn]);
-				WeaveAPI.StageUtils.callLater(request.proxyColumn, WeaveAPI.SessionManager.unassignBusyTask, [request]);
+				WeaveAPI.StageUtils.callLater(request.proxyColumn, WeaveAPI.ProgressIndicator.removeTask, [request]);
 				//requestColumnFromSource(request.columnReference, request.proxyColumn);
 			}
 			else
@@ -373,16 +373,18 @@ package weave.data.DataSources
 			
 			_initializeCalled = false;
 			_pendingColumnRequests.length = 0;
-			var proxyColumn:*;
-			for (proxyColumn in _proxyColumnToReferenceMap)
+			var key:*
+			for (key in _proxyColumnToReferenceMap)
 			{
+				var proxyColumn:ProxyColumn = key as ProxyColumn;
 				// clear the data and allow callbacks to run.
-				(proxyColumn as ProxyColumn).setInternalColumn(ProxyColumn.undefinedColumn);
-				(proxyColumn as ProxyColumn).resumeCallbacks(true);
+				proxyColumn.setInternalColumn(ProxyColumn.undefinedColumn);
+				while (proxyColumn.callbacksAreDelayed)
+					proxyColumn.resumeCallbacks();
 			}
 			// clean up pointers to columns
-			for (proxyColumn in _proxyColumnToReferenceMap)
-				delete _proxyColumnToReferenceMap[proxyColumn];
+			for (key in _proxyColumnToReferenceMap)
+				delete _proxyColumnToReferenceMap[key];
 		}
 	}
 }

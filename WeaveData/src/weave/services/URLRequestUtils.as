@@ -19,37 +19,24 @@
 
 package weave.services
 {
-	import com.as3xls.xls.formula.Tokens;
-	
-	import flash.display.Bitmap;
 	import flash.display.Loader;
 	import flash.display.LoaderInfo;
-	import flash.events.ErrorEvent;
 	import flash.events.Event;
 	import flash.events.IOErrorEvent;
-	import flash.events.ProgressEvent;
-	import flash.events.SecurityErrorEvent;
 	import flash.net.URLLoader;
 	import flash.net.URLLoaderDataFormat;
 	import flash.net.URLRequest;
-	import flash.net.URLVariables;
 	import flash.utils.ByteArray;
 	
 	import mx.core.mx_internal;
-	import mx.rpc.AsyncResponder;
-	import mx.rpc.AsyncToken;
 	import mx.rpc.Fault;
-	import mx.rpc.IResponder;
 	import mx.rpc.events.FaultEvent;
 	import mx.rpc.events.ResultEvent;
-	import mx.utils.ObjectUtil;
+	import mx.utils.URLUtil;
 	
 	import weave.api.WeaveAPI;
-	import weave.api.core.ILinkableObject;
 	import weave.api.services.IURLRequestToken;
 	import weave.api.services.IURLRequestUtils;
-	import weave.utils.ImageLoaderUtils;
-	import weave.utils.ImageLoaderUtilsEvent;
 
 	/**
 	 * An all-static class containing functions for downloading URLs.
@@ -70,10 +57,12 @@ package weave.services
 		 */
 		public function setBaseURL(baseURL:String):void
 		{
-			// remove '?' and everything after
-			baseURL = baseURL.split('?')[0];
-			// remove last '/' and everything after
-			_baseURL = baseURL.substr(0, baseURL.lastIndexOf('/'));
+			// only set baseURL if there is a ':' before first '/'
+			if (baseURL.split('/')[0].indexOf(':') >= 0)
+			{
+				// remove '?' and everything after
+				_baseURL = baseURL.split('?')[0];
+			}
 		}
 		
 		private var _baseURL:String;
@@ -83,24 +72,8 @@ package weave.services
 		 */
 		private function addBaseURL(request:URLRequest):void
 		{
-			if (!_baseURL)
-				return;
-			
-			if (request.url.substr(0, 1) == '/')
-			{
-				// url begins with '/'
-				request.url = _baseURL + request.url;
-			}
-			else
-			{
-				// get everything before first '/'
-				var beforeSlash:String = request.url.split('/')[0];
-				if (beforeSlash.indexOf(':') < 0)
-				{
-					// relative url, so prepend base url
-					request.url = _baseURL + '/' + request.url;
-				}
-			}
+			if (_baseURL)
+				request.url = URLUtil.getFullURL(_baseURL, request.url);
 		}
 		
 		/**
@@ -116,6 +89,9 @@ package weave.services
 		public function getURL(relevantContext:Object, request:URLRequest, asyncResultHandler:Function = null, asyncFaultHandler:Function = null, token:Object = null, dataFormat:String = "binary"):URLLoader
 		{
 			addBaseURL(request);
+			
+			// attempt to load crossdomain.xml from same folder as file
+			//Security.loadPolicyFile(URLUtil.getFullURL(request.url, 'crossdomain.xml'));
 			
 			var urlLoader:CustomURLLoader;
 			try
@@ -183,51 +159,9 @@ package weave.services
 		}
 		
 		/**
-		 * This function will download an image from the URL and call the given handler functions when it completes or a fault occurrs.
-		 * @param relevantContext Specifies an object that the async handlers are relevant to.  If the object is disposed via WeaveAPI.SessionManager.dispose() before the download finishes, the async handler functions will not be called.  This parameter may be null.
-		 * @param request The URL from which to get the image.
-		 * @param asyncResultHandler A function with the following signature:  function(e:ResultEvent, token:Object = null):void.  This function will be called if the request succeeds.
-		 * @param asyncFaultHandler A function with the following signature:  function(e:FaultEvent, token:Object = null):void.  This function will be called if there is an error.
-		 * @param token An object that gets passed to the handler functions.
-		 * @param useCache A boolean indicating whether to use the cached images. If set to <code>true</code>, this function will return null if there is already a bitmap for the request.
-		 * @return An IURLRequestToken that can be used to cancel the request and cancel the async handlers.
-		 */
-		public function getImage(relavantContext:Object, request:URLRequest, asyncResulthandler:Function = null, asyncFaultHandler:Function = null, token:Object = null, useCache:Boolean = true):void
-		{
-			var imageLoaderUtils:ImageLoaderUtils = new ImageLoaderUtils();
-			var handleLoadComplete:Function = function(e:ImageLoaderUtilsEvent):void 
-			{
-				var resultEvent:ResultEvent = ResultEvent.createEvent(e.bitmap);
-				if( asyncResulthandler != null )
-				{
-					_bitmapCache[request.url] = e.bitmap;
-					asyncResulthandler(resultEvent, request.url);
-				}
-			}
-			var handleLoadError:Function = function(e:ImageLoaderUtilsEvent):void
-			{
-				var faultEvent:FaultEvent = FaultEvent.createEvent(new Fault(e.event.type, e.event.target as String));
-				if( asyncFaultHandler != null )
-				{
-					delete _bitmapCache[request.url];
-					asyncFaultHandler(faultEvent, request.url);
-				}
-			}
-			
-			imageLoaderUtils.addEventListener(ImageLoaderUtilsEvent.LOAD_COMPLETE, handleLoadComplete);
-			imageLoaderUtils.addEventListener(ImageLoaderUtilsEvent.ERROR, handleLoadError);
-			imageLoaderUtils.url = request.url;
-		}
-		
-		/**
 		 * This maps a URL to the content that was downloaded from that URL.
 		 */		
 		private const _contentCache:Object = new Object();
-		
-		/**
-		 * This maps a URL to the bitmap data of the image downloaded from that URL.
-		 */
-		private const _bitmapCache:Object = new Object();
 		
 		/**
 		 * A mapping of URL Strings to CustomURLLoaders.
@@ -306,6 +240,7 @@ import mx.rpc.IResponder;
 import mx.rpc.events.FaultEvent;
 import mx.rpc.events.ResultEvent;
 import mx.utils.ObjectUtil;
+import mx.utils.StringUtil;
 
 import weave.api.WeaveAPI;
 import weave.api.core.ILinkableObject;
@@ -336,9 +271,7 @@ internal class CustomURLLoader extends URLLoader
 			}
 			
 			// keep track of pending requests
-			WeaveAPI.ProgressIndicator.addTask(this);
-			if (relevantContext is ILinkableObject)
-				WeaveAPI.SessionManager.assignBusyTask(this, relevantContext as ILinkableObject);
+			WeaveAPI.ProgressIndicator.addTask(this, relevantContext as ILinkableObject);
 			addResponder(new AsyncResponder(removeTask, removeTask));
 			
 			// set up event listeners
@@ -481,6 +414,17 @@ internal class CustomURLLoader extends URLLoader
 		_asyncToken.mx_internal::applyResult(ResultEvent.createEvent(data));
 	}
 	
+	private function fixErrorMessage(errorEvent:ErrorEvent):void
+	{
+		var text:String = errorEvent.text;
+		// If the user is running the non-debugger version of Flash Player, provide the same info the debugger version would provide.
+		if (text == "Error #2048")
+			text += StringUtil.substitute(": Security sandbox violation: {0} cannot load data from {1}", WeaveAPI.topLevelApplication.url, urlRequest.url);
+		if (text == "Error #2032")
+			text += ": Stream Error. URL: " + urlRequest.url;
+		errorEvent.text = text;
+	}
+	
 	/**
 	 * This function gets called when a URLLoader generated by getURL() dispatches an IOErrorEvent.
 	 * @param event The ErrorEvent from a URLLoader.
@@ -496,8 +440,12 @@ internal class CustomURLLoader extends URLLoader
 		
 		// broadcast fault to responders
 		var fault:Fault;
-		if (event is ErrorEvent)
-			fault = new Fault(String(event.type), event.type, (event as ErrorEvent).text);
+		var errorEvent:ErrorEvent = event as ErrorEvent;
+		if (errorEvent)
+		{
+			fixErrorMessage(errorEvent);
+			fault = new Fault(String(event.type), event.type, errorEvent.text);
+		}
 		else
 			fault = new Fault(String(event.type), event.type, "Request cancelled");
 		_asyncToken.mx_internal::applyFault(FaultEvent.createEvent(fault));
@@ -509,6 +457,7 @@ internal class CustomURLLoader extends URLLoader
 	 */
 	private function handleSecurityError(event:SecurityErrorEvent):void
 	{
+		fixErrorMessage(event);
 		if (false)
 		{
 			// call the JQueryCaller to use JQuery to try to download a file that we had a security error

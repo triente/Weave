@@ -41,9 +41,20 @@ package weave.data.KeySets
 	{
 		public function KeySet()
 		{
-			super(Array);
+			super(Array, verifySessionState);
 			// The first callback will update the keys from the session state.
 			addImmediateCallback(this, updateKeys);
+		}
+		
+		/**
+		 * Verifies that the value is a two-dimensional array or null.
+		 */		
+		private function verifySessionState(value:Array):Boolean
+		{
+			for each (var row:Object in value)
+				if (!(row is Array))
+					return false;
+			return true;
 		}
 		
 		/**
@@ -143,6 +154,7 @@ package weave.data.KeySets
 			if (_locked)
 				return false;
 			
+			WeaveAPI.QKeyManager.mapQKeys(newKeys);
 			if (newKeys == _keys)
 				_keys = _keys.concat();
 			
@@ -237,6 +249,7 @@ package weave.data.KeySets
 				return false;
 			
 			var changeDetected:Boolean = false;
+			WeaveAPI.QKeyManager.mapQKeys(additionalKeys);
 			for each (var key:IQualifiedKey in additionalKeys)
 			{
 				if (_keyIndex[key] == undefined)
@@ -270,6 +283,7 @@ package weave.data.KeySets
 				return clearKeys();
 			
 			var changeDetected:Boolean = false;
+			WeaveAPI.QKeyManager.mapQKeys(unwantedKeys);
 			for each (var key:IQualifiedKey in unwantedKeys)
 			{
 				if (_keyIndex[key] != undefined)
@@ -313,12 +327,11 @@ package weave.data.KeySets
 					if (value[keyTypeProperty] != null && value[keysProperty] != null)
 						value = WeaveAPI.CSVParser.createCSVToken(value[keyTypeProperty]) + ',' + value[keysProperty];
 			}
-			// backwards compatibility -- parse CSV
+			// backwards compatibility -- parse CSV String
 			if (value is String)
 				value = WeaveAPI.CSVParser.parseCSV(value as String);
 			
 			// expecting a two-dimensional Array at this point
-			// TODO: error checking?
 			super.setSessionState(value);
 		}
 		

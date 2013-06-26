@@ -30,6 +30,7 @@ package weave.visualization.plotters
 	import weave.api.newLinkableChild;
 	import weave.api.primitives.IBounds2D;
 	import weave.api.registerLinkableChild;
+	import weave.api.ui.IPlotTask;
 	import weave.core.LinkableNumber;
 	import weave.data.AttributeColumns.DynamicColumn;
 	import weave.data.AttributeColumns.EquationColumn;
@@ -54,17 +55,17 @@ package weave.visualization.plotters
 			var fill:SolidFillStyle = fillStyle.internalObject as SolidFillStyle;
 			fill.color.internalDynamicColumn.globalName = Weave.DEFAULT_COLOR_COLUMN;
 			
-			_beginRadians = newLinkableChild(this, EquationColumn);
+			_beginRadians = newSpatialProperty(EquationColumn);
 			_beginRadians.equation.value = "0.5 * PI + getRunningTotal(spanRadians) - getNumber(spanRadians)";
 			_spanRadians = _beginRadians.requestVariable("spanRadians", EquationColumn, true);
 			_spanRadians.equation.value = "getNumber(sortedData) / getSum(sortedData) * 2 * PI";
 			var sortedData:SortedColumn = _spanRadians.requestVariable("sortedData", SortedColumn, true);
 			_filteredData = sortedData.internalDynamicColumn.requestLocalObject(FilteredColumn, true);
-			linkSessionState(keySet.keyFilter, _filteredData.filter);
+			linkSessionState(filteredKeySet.keyFilter, _filteredData.filter);
 			
-			registerSpatialProperty(data);
 			setColumnKeySources([_filteredData]);
 			
+			registerSpatialProperty(data);
 			registerLinkableChild(this, LinkableTextFormat.defaultTextFormat); // redraw when text format changes
 		}
 
@@ -78,10 +79,23 @@ package weave.visualization.plotters
 		public const lineStyle:DynamicLineStyle = registerLinkableChild(this, new DynamicLineStyle(SolidLineStyle));
 		public const fillStyle:DynamicFillStyle = registerLinkableChild(this, new DynamicFillStyle(SolidFillStyle));
 		public const labelAngleRatio:LinkableNumber = registerLinkableChild(this, new LinkableNumber(0, verifyLabelAngleRatio));
+		public const innerRadius:LinkableNumber = registerLinkableChild(this, new LinkableNumber(0, verifyInnerRadius));
 		
 		private function verifyLabelAngleRatio(value:Number):Boolean
 		{
 			return 0 <= value && value <= 1;
+		}
+		private function verifyInnerRadius(value:Number):Boolean
+		{
+			return 0 <= value && value <= 1;
+		}
+		
+		private var _destination:BitmapData;
+		
+		override public function drawPlotAsyncIteration(task:IPlotTask):Number
+		{
+			_destination = task.buffer;
+			return super.drawPlotAsyncIteration(task);
 		}
 		
 		override protected function addRecordGraphicsToTempShape(recordKey:IQualifiedKey, dataBounds:IBounds2D, screenBounds:IBounds2D, tempShape:Shape):void
@@ -95,88 +109,71 @@ package weave.visualization.plotters
 			lineStyle.beginLineStyle(recordKey, graphics);				
 			fillStyle.beginFillStyle(recordKey, graphics);
 			// move to center point
-			WedgePlotter.drawProjectedWedge(graphics, dataBounds, screenBounds, beginRadians, spanRadians);
+			WedgePlotter.drawProjectedWedge(graphics, dataBounds, screenBounds, beginRadians, spanRadians, 0, 0, 1, innerRadius.value);
 			// end fill
 			graphics.endFill();
-		}
-		
-		override public function drawBackground(dataBounds:IBounds2D, screenBounds:IBounds2D, destination:BitmapData):void
-		{
-			if (label.keys.length == 0)
-				return;
 			
-			var recordKey:IQualifiedKey;
-			var beginRadians:Number;
-			var spanRadians:Number;
+			//----------------------
+			
+			// draw label
 			var midRadians:Number;
-			var xScreenRadius:Number;
-			var yScreenRadius:Number;
+			if (!label.containsKey(recordKey as IQualifiedKey))
+				return;
+			beginRadians = _beginRadians.getValueFromKey(recordKey, Number) as Number;
+			spanRadians = _spanRadians.getValueFromKey(recordKey, Number) as Number;
+			midRadians = beginRadians + (spanRadians / 2);
 			
-			for (var i:int; i < _filteredData.keys.length; i++)
+			var cos:Number = Math.cos(midRadians);
+			var sin:Number = Math.sin(midRadians);
+			
+			_tempPoint.x = cos;
+			_tempPoint.y = sin;
+			dataBounds.projectPointTo(_tempPoint, screenBounds);
+			_tempPoint.x += cos * 10 * screenBounds.getXDirection();
+			_tempPoint.y += sin * 10 * screenBounds.getYDirection();
+			
+			_bitmapText.text = label.getValueFromKey(recordKey);
+			
+			_bitmapText.verticalAlign = BitmapText.VERTICAL_ALIGN_MIDDLE;
+			
+			_bitmapText.angle = screenBounds.getYDirection() * (midRadians * 180 / Math.PI);
+			_bitmapText.angle = (_bitmapText.angle % 360 + 360) % 360;
+			if (cos > -0.000001) // the label exactly at the bottom will have left align
 			{
-				if (!label.containsKey(_filteredData.keys[i] as IQualifiedKey))
-					continue;
-				recordKey = _filteredData.keys[i] as IQualifiedKey;
-				beginRadians = _beginRadians.getValueFromKey(recordKey, Number) as Number;
-				spanRadians = _spanRadians.getValueFromKey(recordKey, Number) as Number;
-				midRadians = beginRadians + (spanRadians / 2);
-				
-				var cos:Number = Math.cos(midRadians);
-				var sin:Number = Math.sin(midRadians);
-				
-				_tempPoint.x = cos;
-				_tempPoint.y = sin;
-				dataBounds.projectPointTo(_tempPoint, screenBounds);
-				_tempPoint.x += cos * 10 * screenBounds.getXDirection();
-				_tempPoint.y += sin * 10 * screenBounds.getYDirection();
-				
-				_bitmapText.text = label.getValueFromKey((_filteredData.keys[i] as IQualifiedKey));
-				
-				_bitmapText.verticalAlign = BitmapText.VERTICAL_ALIGN_MIDDLE;
-				
-				_bitmapText.angle = screenBounds.getYDirection() * (midRadians * 180 / Math.PI);
-				_bitmapText.angle = (_bitmapText.angle % 360 + 360) % 360;
-				if (cos > -0.000001) // the label exactly at the bottom will have left align
-				{
-					_bitmapText.horizontalAlign = BitmapText.HORIZONTAL_ALIGN_LEFT;
-					// first get values between -90 and 90, then multiply by the ratio
-					_bitmapText.angle = ((_bitmapText.angle + 90) % 360 - 90) * labelAngleRatio.value;
-				}
-				else
-				{
-					_bitmapText.horizontalAlign = BitmapText.HORIZONTAL_ALIGN_RIGHT;
-					// first get values between -90 and 90, then multiply by the ratio
-					_bitmapText.angle = (_bitmapText.angle - 180) * labelAngleRatio.value;
-				}
-				LinkableTextFormat.defaultTextFormat.copyTo(_bitmapText.textFormat);
-				_bitmapText.x = _tempPoint.x;
-				_bitmapText.y = _tempPoint.y;
-				_bitmapText.draw(destination);
+				_bitmapText.horizontalAlign = BitmapText.HORIZONTAL_ALIGN_LEFT;
+				// first get values between -90 and 90, then multiply by the ratio
+				_bitmapText.angle = ((_bitmapText.angle + 90) % 360 - 90) * labelAngleRatio.value;
 			}
+			else
+			{
+				_bitmapText.horizontalAlign = BitmapText.HORIZONTAL_ALIGN_RIGHT;
+				// first get values between -90 and 90, then multiply by the ratio
+				_bitmapText.angle = (_bitmapText.angle - 180) * labelAngleRatio.value;
+			}
+			LinkableTextFormat.defaultTextFormat.copyTo(_bitmapText.textFormat);
+			_bitmapText.x = _tempPoint.x;
+			_bitmapText.y = _tempPoint.y;
+			_bitmapText.draw(_destination);
 		}
 		
 		private const _tempPoint:Point = new Point();
 		private const _bitmapText:BitmapText = new BitmapText();
 		
-		/**
-		 * This gets the data bounds of the bin that a record key falls into.
-		 */
-		override public function getDataBoundsFromRecordKey(recordKey:IQualifiedKey):Array
+		override public function getDataBoundsFromRecordKey(recordKey:IQualifiedKey, output:Array):void
 		{
 			var beginRadians:Number = _beginRadians.getValueFromKey(recordKey, Number);
 			var spanRadians:Number = _spanRadians.getValueFromKey(recordKey, Number);
-			var bounds:IBounds2D = getReusableBounds();
+			var bounds:IBounds2D = initBoundsArray(output, 1);
 			WedgePlotter.getWedgeBounds(bounds, beginRadians, spanRadians);
-			return [bounds];
 		}
 		
 		/**
 		 * This function returns a Bounds2D object set to the data bounds associated with the background.
 		 * @param outputDataBounds A Bounds2D object to store the result in.
 		 */
-		override public function getBackgroundDataBounds():IBounds2D
+		override public function getBackgroundDataBounds(output:IBounds2D):void
 		{
-			return getReusableBounds(-1, -1, 1, 1);
+			output.setBounds(-1, -1, 1, 1);
 		}
 	}
 }

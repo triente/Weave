@@ -21,6 +21,7 @@ package weave.visualization.plotters
 {	
 	import weave.api.core.ILinkableObject;
 	import weave.api.newLinkableChild;
+	import weave.api.primitives.IBounds2D;
 	import weave.core.LinkableNumber;
 	import weave.core.LinkableString;
 
@@ -35,13 +36,18 @@ package weave.visualization.plotters
 		
 		public const polarRadians:LinkableNumber = newLinkableChild(this,LinkableNumber);
 		public const radius:LinkableNumber = newLinkableChild(this,LinkableNumber);
+		//public const anchorColor:LinkableNumber = newLinkableChild(this, LinkableNumber);
 		public const title:LinkableString = newLinkableChild(this, LinkableString);
+		
+		//metric used to calculate the class discrimiation for eg t-stat, p value, mean ratio etc
+		public const classDiscriminationMetric:LinkableNumber = newLinkableChild(this,LinkableNumber);
+		
+		//is the class to which an anchor belongs after the class discimination algorithm is done
+		public const classType:LinkableString = newLinkableChild(this, LinkableString);
 		
 		public function AnchorPoint()
 		{
-		}		
-		
-		private const convert:Number = (180/Math.PI);
+		}
 		
 		private function convertCoords():void
 		{

@@ -62,7 +62,7 @@ public class RServiceUsingJRI
 		}
 	}
 	
-	private static  ScriptEngine getREngine() throws RemoteException
+	public static  ScriptEngine getREngine() throws RemoteException
 	{
 		try
 		{
@@ -216,7 +216,7 @@ public class RServiceUsingJRI
 		}
 		catch (ScriptException e)
 		{
-			System.out.println(str);
+			System.err.println(str);
 			throw e;
 		}
 		

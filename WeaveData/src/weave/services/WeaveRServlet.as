@@ -44,8 +44,23 @@ package weave.services
 			return servlet.invokeAsyncMethod("runScript", arguments);
 		}
 		
+		public function checkforJRIService():AsyncToken
+		{
+			return servlet.invokeAsyncMethod("checkforJRIService",arguments);
+		}
+		
+		public function runScriptOnCSVOnServer(queryObject:Array):AsyncToken
+		{
+			return servlet.invokeAsyncMethod("runScriptOnCSVOnServer", arguments);
+		}
+		
+		public function runScriptOnSQLOnServer(queryObject:Array, queryStatement:String, schema:String):AsyncToken
+		{
+			return servlet.invokeAsyncMethod("runScriptOnSQLOnServer", arguments);
+		}
+		
 		// async result will be of type KMeansClusteringResult
-		public function KMeansClustering( inputNames:Array, inputValues:Array,showWarnings:Boolean,numberOfClusters:int,iterations:int):AsyncToken
+		public function KMeansClustering(inputNames:Array, inputValues:Array,showWarnings:Boolean,numberOfClusters:int,iterations:int):AsyncToken
 		{			
 			return servlet.invokeAsyncMethod("kMeansClustering", arguments);
 		}

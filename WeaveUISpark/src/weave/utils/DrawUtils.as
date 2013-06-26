@@ -19,6 +19,7 @@
 package weave.utils
 {
 	import flash.display.Graphics;
+	import flash.geom.Point;
 	
 	/**
 	 * 
@@ -37,9 +38,10 @@ package weave.utils
 		 * @param endAngle The angle where the arc ends
 		 * @param radius The radius of the circle that contains the arc
 		 * @param yRadius Optional y radius for an elliptical arc instead of a circular one
+		 * @param outputStartCoords A Point object used to output the starting coordinates of the arc.
 		 * @author adufilie
 		 */		
-		public static function arcTo(graphics:Graphics, continueLine:Boolean, xCenter:Number, yCenter:Number, startAngle:Number, endAngle:Number, radius:Number, yRadius:Number = NaN):void
+		public static function arcTo(graphics:Graphics, continueLine:Boolean, xCenter:Number, yCenter:Number, startAngle:Number, endAngle:Number, radius:Number, yRadius:Number = NaN, outputStartCoords:Point = null):void
 		{
 			if (isNaN(yRadius))
 				yRadius = radius;
@@ -59,7 +61,7 @@ package weave.utils
 			if (startAngle > endAngle)
 				segmentSpan = -segmentSpan;
 			// draw the segments
-			var segmentCount:int = Math.ceil(Math.abs(startAngle - endAngle) / segmentSpan);
+			var segmentCount:int = Math.ceil((endAngle - startAngle) / segmentSpan);
 			for (var i:int = 0; i <= segmentCount; i++)
 			{
 				// make sure last coord is at specified endAngle
@@ -68,6 +70,11 @@ package weave.utils
 				
 				var x:Number = xCenter + Math.cos(startAngle) * radius;
 				var y:Number = yCenter + Math.sin(startAngle) * yRadius;
+				if (i == 0 && outputStartCoords)
+				{
+					outputStartCoords.x = x;
+					outputStartCoords.y = y;
+				}
 				if (i == 0 && !continueLine)
 					graphics.moveTo(x, y);
 				else

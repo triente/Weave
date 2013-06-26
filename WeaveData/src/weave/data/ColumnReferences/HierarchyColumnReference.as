@@ -21,6 +21,7 @@ package weave.data.ColumnReferences
 {
 	import weave.api.newLinkableChild;
 	import weave.core.LinkableXML;
+	import weave.utils.AsyncSort;
 	import weave.utils.HierarchyUtils;
 
 	/**
@@ -36,7 +37,7 @@ package weave.data.ColumnReferences
 
 		/**
 		 * This function gets metadata associated with the column.
-		 * For standard metadata property names, refer to the AttributeColumnMetadata class.
+		 * For standard metadata property names, refer to the ColumnMetadata class.
 		 * @param propertyName The name of the metadata property to retrieve.
 		 * @result The value of the specified metadata property.
 		 */
@@ -65,7 +66,8 @@ package weave.data.ColumnReferences
 				var attrs:XMLList = HierarchyUtils.getLeafNodeFromPath(hierarchyPath.value || <tag/>).attributes();
 				for each (var attr:XML in attrs)
 					properties.push(attr.localName() + ': "' + attr.toXMLString() + '"');
-				_hash = _hashPrefix + ';' + dataSourceName.value + '{' + properties.sort().join(', ') + '}';
+				AsyncSort.sortImmediately(properties);
+				_hash = _hashPrefix + ';' + dataSourceName.value + '{' + properties.join(', ') + '}';
 			}
 			return _hash;
 		}

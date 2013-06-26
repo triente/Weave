@@ -50,6 +50,7 @@ package weave.core
 	import weave.api.core.ISessionManager;
 	import weave.api.reportError;
 	import weave.compiler.StandardLib;
+	import weave.utils.AsyncSort;
 	import weave.utils.Dictionary2D;
 
 	/**
@@ -127,7 +128,7 @@ package weave.core
 			
 			// if the child doesn't have an owner yet, this parent is the owner of the child
 			// and the child should be disposed when the parent is disposed.
-			// registerDisposedChild() also initializes the required Dictionaries.
+			// registerDisposableChild() also initializes the required Dictionaries.
 			registerDisposableChild(linkableParent, linkableChild);
 
 			// only continue if the child is not already registered with the parent
@@ -339,6 +340,17 @@ package weave.core
 			var sessionState:Object = getSessionState(source);
 			setSessionState(destination, sessionState, true);
 		}
+		
+		private function applyDiff(base:Object, diff:Object):Object
+		{
+			if (base == null || typeof(base) != 'object')
+				return diff;
+			
+			for (var key:String in diff)
+				base[key] = applyDiff(base[key], diff[key]);
+			
+			return base;
+		}
 
 		/**
 		 * @param linkableObject An object containing sessioned properties (sessioned objects may be nested).
@@ -359,17 +371,7 @@ package weave.core
 				var lv:ILinkableVariable = linkableObject as ILinkableVariable;
 				if (removeMissingDynamicObjects == false && newState && getQualifiedClassName(newState) == 'Object')
 				{
-					// apply diff
-					var oldState:Object = lv.getSessionState();
-					for (var key:String in newState)
-					{
-						var value:Object = newState[key];
-						//if (typeof(value) == 'object')
-						//	todo: recursive call
-						//else
-						oldState[key] = value;
-					}
-					lv.setSessionState(oldState);
+					lv.setSessionState(applyDiff(lv.getSessionState(), newState));
 				}
 				else
 				{
@@ -420,11 +422,22 @@ package weave.core
 			
 			// pass deprecated session state to deprecated setters
 			for each (name in getDeprecatedSetterNames(linkableObject))
+			{
 				if (newState.hasOwnProperty(name) && newState[name] !== null)
+				{
+					_deprecatedSetterShouldRemoveMissingDynamicObjects = removeMissingDynamicObjects;
 					linkableObject[name] = newState[name];
+				}
+			}
 			
 			// resume callbacks after setting session state
 			objectCC.resumeCallbacks();
+		}
+		
+		private var _deprecatedSetterShouldRemoveMissingDynamicObjects:Boolean;
+		public function get deprecatedSetterShouldRemoveMissingDynamicObjects():Boolean
+		{
+			return _deprecatedSetterShouldRemoveMissingDynamicObjects;
 		}
 		
 		private const _getSessionStateIgnoreList:Dictionary = new Dictionary(true); // keeps track of which objects are currently being traversed
@@ -566,10 +579,10 @@ package weave.core
 				}
 			}
 			
-			propertyNames.sort();
+			AsyncSort.sortImmediately(propertyNames);
 			classNameToSessionedPropertyNamesMap[classQName] = propertyNames;
 			
-			deprecatedSetters.sort();
+			AsyncSort.sortImmediately(deprecatedSetters);
 			classNameToDeprecatedSetterNamesMap[classQName] = deprecatedSetters;
 		}
 		
@@ -681,6 +694,8 @@ package weave.core
 		private const _d2dTaskOwner:Dictionary2D = new Dictionary2D(false, true); // task cannot use weak pointer because it may be a function
 		private const _dBusyTraversal:Dictionary = new Dictionary(true); // ILinkableObject -> Boolean
 		private const _aBusyTraversal:Array = [];
+		private const _dUnbusyTriggerCounts:Dictionary = new Dictionary(true); // ILinkableObject -> int
+		private const _dUnbusyStackTraces:Dictionary = new Dictionary(true); // ILinkableObject -> String
 		
 		private function disposeBusyTaskPointers(disposedObject:ILinkableObject):void
 		{
@@ -699,14 +714,19 @@ package weave.core
 			if (debugBusyTasks)
 				_dTaskStackTrace[taskToken] = new Error("Stack trace when task was last assigned").getStackTrace();
 			
-			if (taskToken is AsyncToken)
+			// stop if already assigned
+			var test:* = _d2dTaskOwner.dictionary[taskToken];
+			if (test && test[busyObject])
+				return;
+			
+			if (taskToken is AsyncToken && !WeaveAPI.ProgressIndicator.hasTask(taskToken))
 				(taskToken as AsyncToken).addResponder(new AsyncResponder(unassignAsyncToken, unassignAsyncToken, taskToken));
 			
 			_d2dOwnerTask.set(busyObject, taskToken, true);
 			_d2dTaskOwner.set(taskToken, busyObject, true);
 		}
 		
-		private function unassignAsyncToken(event:Event, token:Object):void
+		private function unassignAsyncToken(event:Event, token:AsyncToken):void
 		{
 			unassignBusyTask(token);
 		}
@@ -717,42 +737,78 @@ package weave.core
 		 */
 		public function unassignBusyTask(taskToken:Object):void
 		{
-			var owner:*;
-			var dOwner:Dictionary = _d2dTaskOwner.dictionary[taskToken];
-			delete _d2dTaskOwner.dictionary[taskToken];
-			for (owner in dOwner)
-				delete _d2dOwnerTask.dictionary[owner][taskToken];
-			
-			if (debugBusyTasks)
+			if (WeaveAPI.ProgressIndicator.hasTask(taskToken))
 			{
-				for (owner in dOwner)
-					dOwner[owner] = getCallbackCollection(owner).triggerCounter;
+				WeaveAPI.ProgressIndicator.removeTask(taskToken);
+				return;
+			}
+			
+			var dOwner:Dictionary = _d2dTaskOwner.dictionary[taskToken];
+			if (!dOwner)
+				return;
+			
+			delete _d2dTaskOwner.dictionary[taskToken];
+			nextOwner: for (var owner:* in dOwner)
+			{
+				var dTask:Dictionary = _d2dOwnerTask.dictionary[owner];
+				delete dTask[taskToken];
 				
-				WeaveAPI.StageUtils.callLater(null, debugBusyTasksCallLater, [taskToken, dOwner]);
+				// if there are other tasks, continue to next owner
+				for (var task:* in dTask)
+					continue nextOwner;
+				
+				// when there are no more tasks, check later to see if callbacks trigger
+				_dUnbusyTriggerCounts[owner] = getCallbackCollection(owner).triggerCounter;
+				WeaveAPI.StageUtils.startTask(null, unbusyTrigger, WeaveAPI.TASK_PRIORITY_IMMEDIATE);
+				
+				if (debugBusyTasks)
+				{
+					var stackTrace:String = new Error("Stack trace when last task was unassigned").getStackTrace();
+					_dUnbusyStackTraces[owner] = {assigned: _dTaskStackTrace[taskToken], unassigned: stackTrace, token: taskToken};
+				}
 			}
 		}
 		
-		private function debugBusyTasksCallLater(taskToken:Object, ownerLookup:Dictionary):void
+		/**
+		 * Called the frame after an owner's last busy task is unassigned.
+		 * Triggers callbacks if they have not been triggered since then.
+		 */
+		private function unbusyTrigger(stopTime:int):Number
 		{
-			if (linkableObjectIsBusy(WeaveAPI.globalHashMap))
-			{
-				WeaveAPI.StageUtils.callLater(null, debugBusyTasksCallLater, arguments);
-				return;
-			}
-			for (var owner:* in ownerLookup)
-			{
-				if (linkableObjectIsBusy(owner))
-					continue;
-				// if owner is no longer busy but has not triggered callbacks, there may be a problem.
-				var prevCounter:int = ownerLookup[owner];
-				var cc:ICallbackCollection = getCallbackCollection(owner);
-				if (prevCounter == cc.triggerCounter)
+			var owner:*;
+			do {
+				if (getTimer() > stopTime)
+					return 0;
+				
+				owner = null;
+				for (owner in _dUnbusyTriggerCounts)
 				{
-					var stackTrace:String = _dTaskStackTrace[taskToken];
-					trace('object is no longer busy, but has not triggered callbacks:', debugId(owner));
-					trace(stackTrace);
+					var triggerCount:int = _dUnbusyTriggerCounts[owner];
+					delete _dUnbusyTriggerCounts[owner]; // affects next for loop iteration - mitigated by outer loop
+					
+					var cc:CallbackCollection = CallbackCollection(getCallbackCollection(owner));
+					if (cc.wasDisposed)
+						continue; // already disposed
+					
+					if (cc.triggerCounter != triggerCount)
+						continue; // already triggered
+					
+					if (linkableObjectIsBusy(owner))
+						continue; // busy again
+					
+					if (debugBusyTasks)
+					{
+						var stackTraces:Object = _dUnbusyStackTraces[owner];
+						trace('Triggering callbacks because they have not triggered since owner has becoming unbusy:', debugId(owner));
+						trace(stackTraces.assigned);
+						trace(stackTraces.unassigned);
+					}
+					
+					cc.triggerCallbacks();
 				}
-			}
+			} while (owner);
+			
+			return 1;
 		}
 		
 		/**
@@ -1048,8 +1104,8 @@ package weave.core
 			}
 			
 			// dispose of the remaining specified objects
-			for (var i:int = 0; i < moreObjects.length; i++)
-				disposeObjects(moreObjects[i]);
+			for each (object in moreObjects)
+				disposeObjects(object);
 		}
 		
 		// FOR DEBUGGING PURPOSES
@@ -1282,12 +1338,16 @@ package weave.core
 			// a function that takes zero parameters and sets the bindable value.
 			var synchronize:Function = function(firstParam:* = undefined, callingLater:Boolean = false):void
 			{
-				// unlink if linkableVariable was disposed of
+				// unlink if linkableVariable was disposed
 				if (objectWasDisposed(linkableVariable))
 				{
 					unlinkBindableProperty(linkableVariable, bindableParent, bindablePropertyName);
 					return;
 				}
+				// stop if unlinked
+				var test:Object;
+				if (!(test = _watcherMap[linkableVariable]) || !(test = test[bindableParent]) || !test.hasOwnProperty(bindablePropertyName))
+					return;
 				
 				/*debugLink(
 					linkableVariable.getSessionState(),
@@ -1421,6 +1481,7 @@ package weave.core
 			};
 			// Copy session state over to bindable property now, before calling BindingUtils.bindSetter(),
 			// because that will copy from the bindable property to the sessioned property.
+			_watcherMap[linkableVariable][bindableParent][bindablePropertyName] = null; // prevents synchronize() from thinking it's unlinked
 			synchronize();
 			watcher = BindingUtils.bindSetter(synchronize, bindableParent, bindablePropertyName);
 			// save a mapping from the linkableVariable,bindableParent,bindablePropertyName parameters to the watcher for the property
@@ -1591,7 +1652,7 @@ package weave.core
 					}
 					
 					// save in new array and remove from lookup
-					result.push(new DynamicState(objectName, className, sessionState));
+					result.push(new DynamicState(objectName || null, className, sessionState)); // convert empty string to null
 					changeDetected = true;
 				}
 				
@@ -1599,7 +1660,7 @@ package weave.core
 				// Add DynamicState entries with an invalid className ("delete") to convey that each of these objects should be removed.
 				for (objectName in oldLookup)
 				{
-					result.push(new DynamicState(objectName, DIFF_DELETE));
+					result.push(new DynamicState(objectName || null, DIFF_DELETE)); // convert empty string to null
 					changeDetected = true;
 				}
 				
@@ -1747,8 +1808,8 @@ package weave.core
 				else // not typed session state
 				{
 					// overwrite old Array with new Array's values
-					baseDiff.length = diffToAdd.length;
-					for (i = diffToAdd.length - 1; i >= 0; i--)
+					i = baseDiff.length = diffToAdd.length;
+					while (i--)
 					{
 						var value:Object = diffToAdd[i];
 						if (value is String)

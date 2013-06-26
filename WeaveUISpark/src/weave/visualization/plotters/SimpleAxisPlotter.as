@@ -26,14 +26,13 @@ package weave.visualization.plotters
 	import flash.text.TextFormatAlign;
 	
 	import mx.formatters.NumberFormatter;
-	import mx.utils.NameUtil;
 	
 	import weave.api.WeaveAPI;
-	import weave.api.data.IQualifiedKey;
 	import weave.api.getCallbackCollection;
 	import weave.api.newLinkableChild;
-	import weave.api.primitives.IBounds2D;
 	import weave.api.registerLinkableChild;
+	import weave.api.data.IQualifiedKey;
+	import weave.api.primitives.IBounds2D;
 	import weave.api.ui.IPlotTask;
 	import weave.compiler.StandardLib;
 	import weave.core.CallbackCollection;
@@ -156,27 +155,28 @@ package weave.visualization.plotters
 		{
 			var _axisLineMinValue:Number = axisLineMinValue.value;
 			var _axisLineMaxValue:Number = axisLineMaxValue.value;
-			
+			axisLineDataBounds.copyTo(_tempBounds);
+
 			var tickValue:Number;
 			// special case for min,max labels
 			if (recordKey == MIN_LABEL_KEY)
 			{
 				tickValue = _axisLineMinValue;
-				outputPoint.x = axisLineDataBounds.xMin.value;
-				outputPoint.y = axisLineDataBounds.yMin.value;
+				outputPoint.x = _tempBounds.xMin;
+				outputPoint.y = _tempBounds.yMin;
 			}
 			else if (recordKey == MAX_LABEL_KEY)
 			{
 				tickValue = _axisLineMaxValue;
-				outputPoint.x = axisLineDataBounds.xMax.value;
-				outputPoint.y = axisLineDataBounds.yMax.value;
+				outputPoint.x = _tempBounds.xMax;
+				outputPoint.y = _tempBounds.yMax;
 			}
 			else
 			{
 				var tickIndex:int = parseInt(recordKey.localName);
 				tickValue = StandardLib.roundSignificant(_axisDescription.tickMin + tickIndex * _axisDescription.tickDelta);
-				outputPoint.x = StandardLib.scale(tickValue, _axisLineMinValue, _axisLineMaxValue, axisLineDataBounds.xMin.value, axisLineDataBounds.xMax.value);
-				outputPoint.y = StandardLib.scale(tickValue, _axisLineMinValue, _axisLineMaxValue, axisLineDataBounds.yMin.value, axisLineDataBounds.yMax.value);
+				outputPoint.x = StandardLib.scale(tickValue, _axisLineMinValue, _axisLineMaxValue, _tempBounds.xMin, _tempBounds.xMax);
+				outputPoint.y = StandardLib.scale(tickValue, _axisLineMinValue, _axisLineMaxValue, _tempBounds.yMin, _tempBounds.yMax);
 			}
 			
 			return tickValue;
@@ -184,16 +184,11 @@ package weave.visualization.plotters
 		
 		/**
 		 * gets the bounds of a tick mark 
-		 * @param recordKey
-		 * @return 
-		 * 
 		 */		
-		override public function getDataBoundsFromRecordKey(recordKey:IQualifiedKey):Array
+		override public function getDataBoundsFromRecordKey(recordKey:IQualifiedKey, output:Array):void
 		{
 			getTickValueAndDataCoords(recordKey, tempPoint);
-			var bounds:IBounds2D = getReusableBounds();
-			bounds.setCenteredRectangle(tempPoint.x, tempPoint.y, 0, 0);
-			return [bounds];
+			initBoundsArray(output).setCenteredRectangle(tempPoint.x, tempPoint.y, 0, 0);
 		}
 		
 		/**
@@ -410,9 +405,7 @@ package weave.visualization.plotters
 			}
 		}
 		
-		public var name:String = NameUtil.createUniqueName(this);
-		
-		private const _tempBounds:IBounds2D = new Bounds2D();
+		private const _tempBounds:Bounds2D = new Bounds2D();
 		
 		protected function setupBitmapText():void
 		{
@@ -473,11 +466,9 @@ package weave.visualization.plotters
 			// END TEMPORARY SOLUTION
 		}
 		
-		override public function getBackgroundDataBounds():IBounds2D
+		override public function getBackgroundDataBounds(output:IBounds2D):void
 		{
-			var bounds:IBounds2D = getReusableBounds();
-			axisLineDataBounds.copyTo(bounds);
-			return bounds;
+			axisLineDataBounds.copyTo(output);
 		}
 		
 		private function initPrivateAxisLineBoundsVariables(dataBounds:IBounds2D, screenBounds:IBounds2D):void

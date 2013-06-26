@@ -30,11 +30,11 @@ package weave.visualization.plotters
 	import flash.utils.getTimer;
 	
 	import weave.Weave;
+	import weave.api.core.IDisposableObject;
 	import weave.api.core.ILinkableHashMap;
 	import weave.api.data.IAttributeColumn;
 	import weave.api.data.IColumnWrapper;
 	import weave.api.data.IQualifiedKey;
-	import weave.api.disposeObjects;
 	import weave.api.linkSessionState;
 	import weave.api.newLinkableChild;
 	import weave.api.primitives.IBounds2D;
@@ -50,6 +50,7 @@ package weave.visualization.plotters
 	import weave.data.AttributeColumns.ReprojectedGeometryColumn;
 	import weave.data.AttributeColumns.StreamedGeometryColumn;
 	import weave.primitives.GeneralizedGeometry;
+	import weave.primitives.GeometryType;
 	import weave.utils.PlotterUtils;
 	import weave.visualization.plotters.styles.ExtendedFillStyle;
 	import weave.visualization.plotters.styles.ExtendedLineStyle;
@@ -59,7 +60,7 @@ package weave.visualization.plotters
 	 * 
 	 * @author adufilie
 	 */
-	public class GeometryPlotter extends AbstractPlotter implements IPlotterWithGeometries
+	public class GeometryPlotter extends AbstractPlotter implements IPlotterWithGeometries, IDisposableObject
 	{
 		public function GeometryPlotter()
 		{
@@ -113,7 +114,7 @@ package weave.visualization.plotters
 		public const iconSize:LinkableNumber = registerLinkableChild(this, new LinkableNumber(10, validateIconSize), disposeCachedBitmaps);
 		private function validateIconSize(value:Number):Boolean { return 0.2 <= value && value <= 1024; };
 
-		override public function getDataBoundsFromRecordKey(recordKey:IQualifiedKey):Array
+		override public function getDataBoundsFromRecordKey(recordKey:IQualifiedKey, output:Array):void
 		{
 			var geoms:Array = null;
 			var column:IAttributeColumn = geometryColumn; 
@@ -125,11 +126,11 @@ package weave.visualization.plotters
 			else if (value is GeneralizedGeometry)
 				geoms = [value as GeneralizedGeometry]; // single geom -- create array
 
-			var results:Array = [];
+			var i:int = 0;
 			if (geoms != null)
 				for each (var geom:GeneralizedGeometry in geoms)
-					results.push(geom.bounds);
-			return results;
+					output[i++] = geom.bounds;
+			output.length = i;
 		}
 		
 		public function getGeometriesFromRecordKey(recordKey:IQualifiedKey, minImportance:Number = 0, bounds:IBounds2D = null):Array
@@ -159,7 +160,7 @@ package weave.visualization.plotters
 		 * This function returns a Bounds2D object set to the data bounds associated with the background.
 		 * @param outputDataBounds A Bounds2D object to store the result in.
 		 */
-		override public function getBackgroundDataBounds():IBounds2D
+		override public function getBackgroundDataBounds(output:IBounds2D):void
 		{
 			// try to find an internal StreamedGeometryColumn
 			var column:IAttributeColumn = geometryColumn;
@@ -169,9 +170,9 @@ package weave.visualization.plotters
 			// if the internal geometry column is a streamed column, request the required detail
 			var streamedColumn:StreamedGeometryColumn = column as StreamedGeometryColumn;
 			if (streamedColumn)
-				return streamedColumn.collectiveBounds;
+				output.copyFrom(streamedColumn.collectiveBounds);
 			else
-				return getReusableBounds(); // undefined
+				output.reset(); // undefined
 		}
 
 		/**
@@ -280,16 +281,22 @@ package weave.visualization.plotters
 		
 		private const RECORD_INDEX:String = 'recordIndex';
 		private const MIN_IMPORTANCE:String = 'minImportance';
+		private const D_PROGRESS:String = 'd_progress';
+		private const D_ASYNCSTATE:String = 'd_asyncState';
 		override public function drawPlotAsyncIteration(task:IPlotTask):Number
 		{
 			if (task.iteration == 0)
 			{
-				task.asyncState[RECORD_INDEX] = 0; 
+				task.asyncState[RECORD_INDEX] = 0;
 				task.asyncState[MIN_IMPORTANCE] = getDataAreaPerPixel(task.dataBounds, task.screenBounds) * pixellation.value;
+				task.asyncState[D_PROGRESS] = new Dictionary(true);
+				task.asyncState[D_ASYNCSTATE] = new Dictionary(true);
 			}
 			
 			var recordIndex:Number = task.asyncState[RECORD_INDEX];
 			var minImportance:Number = task.asyncState[MIN_IMPORTANCE];
+			var d_progress:Dictionary = task.asyncState[D_PROGRESS];
+			var d_asyncState:Dictionary = task.asyncState[D_ASYNCSTATE];
 			var progress:Number = 1; // set to 1 in case loop is not entered
 			while (recordIndex < task.recordKeys.length)
 			{
@@ -316,7 +323,7 @@ package weave.visualization.plotters
 						if (geom)
 						{
 							// skip shapes that are considered unimportant at this zoom level
-							if (geom.geomType == GeneralizedGeometry.GEOM_TYPE_POLYGON && geom.bounds.getArea() < minImportance)
+							if (geom.geomType == GeometryType.POLYGON && geom.bounds.getArea() < minImportance)
 								continue;
 							if (!styleSet)
 							{
@@ -350,19 +357,21 @@ package weave.visualization.plotters
 			for each (var plotter:IPlotter in symbolPlottersArray)
 			{
 				if (task.iteration == 0)
-					_asyncState[plotter] = {};
-				task.asyncState = _asyncState[plotter];
-				if (_asyncProgress[plotter] != 1)
-					_asyncProgress[plotter] = plotter.drawPlotAsyncIteration(task);
-				progress += _asyncProgress[plotter];
+				{
+					d_asyncState[plotter] = {};
+					d_progress[plotter] = 0;
+				}
+				if (d_progress[plotter] != 1)
+				{
+					task.asyncState = d_asyncState[plotter];
+					d_progress[plotter] = plotter.drawPlotAsyncIteration(task);
+				}
+				progress += d_progress[plotter];
 			}
 			task.asyncState = ourAsyncState;
 			
 			return progress / (1 + symbolPlottersArray.length);
 		}
-		
-		private const _asyncState:Dictionary = new Dictionary(true); // IPlotter -> Object
-		private const _asyncProgress:Dictionary = new Dictionary(true); // IPlotter -> Number
 		
 		private static const tempPoint:Point = new Point(); // reusable object
 		private static const tempMatrix:Matrix = new Matrix(); // reusable object
@@ -387,7 +396,7 @@ package weave.visualization.plotters
 
 			var currentNode:Object;
 
-			if (shapeType == GeneralizedGeometry.GEOM_TYPE_POINT)
+			if (shapeType == GeometryType.POINT)
 			{
 				for each (currentNode in points)
 				{
@@ -417,7 +426,7 @@ package weave.visualization.plotters
 			}
 
 			// prevent moveTo/lineTo from drawing a filled polygon if the shape type is line
-			if (shapeType == GeneralizedGeometry.GEOM_TYPE_LINE)
+			if (shapeType == GeometryType.LINE)
 				outputGraphics.endFill();
 
 			var numPoints:int = points.length;
@@ -439,14 +448,13 @@ package weave.visualization.plotters
 				outputGraphics.lineTo(tempPoint.x, tempPoint.y);
 			}
 			
-			if (shapeType == GeneralizedGeometry.GEOM_TYPE_POLYGON)
+			if (shapeType == GeometryType.POLYGON)
 				outputGraphics.lineTo(firstX, firstY);
 		}
 		
-		override public function dispose():void
+		public function dispose():void
 		{
 			disposeCachedBitmaps();
-			super.dispose();
 		}
 
 		// backwards compatibility 0.9.6

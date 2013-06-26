@@ -22,6 +22,7 @@ package weave.utils
 	import flash.display.DisplayObject;
 	import flash.display.DisplayObjectContainer;
 	import flash.events.TimerEvent;
+	import flash.geom.Rectangle;
 	import flash.system.Capabilities;
 	import flash.utils.ByteArray;
 	import flash.utils.Dictionary;
@@ -39,12 +40,70 @@ package weave.utils
 	 */
 	public class DebugUtils
 	{
+		public static function _testVariableLengthEncoding(random:Boolean = true, count:uint = 10000, max:uint = int.MAX_VALUE):void
+		{
+			var i:uint;
+			var b:uint;
+			var value:uint;
+			var array:Array = new Array(count);
+			var bytes1:ByteArray = new ByteArray();
+			var bytes2:ByteArray = new ByteArray();
+			for (i = 0; i < array.length; i++)
+			{
+				value = random ? uint(Math.random() * max) : i;
+				array[i] = value;
+				bytes1.writeUnsignedInt(value);
+				
+				do {
+					b = value & 0x7F;
+					value = (value >> 7) & 0x01FFFFFF;
+					if (value == 0)
+					{
+						bytes2.writeByte(b);
+						break;
+					}
+					
+					bytes2.writeByte(b | 0x80);
+				} while (true);
+			}
+			bytes1.position = 0;
+			bytes2.position = 0;
+			
+			weaveTrace(StringUtil.substitute('array.length {0}, bytes1.length {1}, bytes2.length {2}',array.length,bytes1.length, bytes2.length));
+			
+			DebugTimer.begin();
+			
+			i = 0;
+			while (bytes1.bytesAvailable)
+			{
+				value = bytes1.readUnsignedInt();
+				if (array[i++] != value)
+					throw "bytes1 fail";
+			}
+			
+			DebugTimer.lap('bytes1');
+			
+			i = 0;
+			while (bytes2.bytesAvailable)
+			{
+				value = (b = bytes2.readUnsignedByte()) & 0x7F;
+				for (var s:uint = 7; b & 0x80; s += 7)
+					value |= ((b = bytes2.readUnsignedByte()) & 0x7F) << s;
+				
+				if (array[i++] != value)
+					throw "bytes2 fail";
+			}
+			
+			DebugTimer.end('bytes2');
+		}
+		
+		
 		/****************************
 		 **  Object id and lookup  **
 		 ****************************/
 		
 		private static var _idToObjRef:Dictionary = new Dictionary();
-		private static var _objToId:Dictionary = new Dictionary(true);
+		private static var _objToId:Dictionary = new Dictionary(true); // weakKeys=true to avoid memory leak
 		private static var _nextId:int = 0;
 		
 		/**
@@ -88,11 +147,22 @@ package weave.utils
 		 * This function will look up the object corresponding to the specified debugId.
 		 * @param debugId A debugId String or integer.
 		 */
-		public static function debugLookup(debugId:*):Object
+		public static function debugLookup(debugId:* = undefined):Object
 		{
+			if (debugId == undefined)
+				return getAllDebugIds();
 			for (var object:Object in _idToObjRef[debugId])
 				return object;
 			return null;
+		}
+		
+		public static function getAllDebugIds():Array
+		{
+			var ids:Array = new Array(_nextId);
+			for (var i:int = 0; i < _nextId; i++)
+				for (var object:Object in _idToObjRef[i])
+					ids[i] = _objToId[object];
+			return ids;
 		}
 		
 		/**
@@ -105,6 +175,16 @@ package weave.utils
 			_nextId = 0;
 		}
 		
+		/**
+		 * This will keep strong pointers to identified objects if enabled.
+		 */		
+		public static function keepDebugIds(enable:Boolean = true):void
+		{
+			var old:Dictionary = _objToId;
+			_objToId = new Dictionary(!enable);
+			for (var key:Object in old)
+				_objToId[key] = old[key];
+		}
 		
 		/*****************
 		 **  Profiling  **
@@ -163,12 +243,10 @@ package weave.utils
 		
 		public static function debugDisplayList(root:DisplayObject, maxDepth:int = -1, currentDepth:int = 0):String
 		{
-			var str:String = StringUtil.substitute(
-				'{0}{1} ({2})\n',
-				StandardLib.lpad('', currentDepth * 2, '| '),
-				root.name,
-				debugId(root)
-			);
+			var pad:String = StandardLib.lpad('', currentDepth * 2, '| ');
+			var rect:Rectangle = root.getRect(root.parent);
+			var str:String = StandardLib.substitute("{0}{1} ({2}) {3}\n", pad, root.name, debugId(root), rect);
+			
 			var container:DisplayObjectContainer = root as DisplayObjectContainer;
 			if (container && currentDepth != maxDepth)
 				for (var i:int = 0; i < container.numChildren; i++)

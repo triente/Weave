@@ -19,6 +19,10 @@
 
 package weave.visualization.plotters
 {
+	import com.modestmaps.mapproviders.BlueMarbleMapProvider;
+	import com.modestmaps.mapproviders.IMapProvider;
+	import com.modestmaps.mapproviders.OpenStreetMapProvider;
+	
 	import flash.display.Bitmap;
 	import flash.display.BitmapData;
 	import flash.display.Shape;
@@ -33,6 +37,7 @@ package weave.visualization.plotters
 	import org.openscales.proj4as.ProjConstants;
 	
 	import weave.api.WeaveAPI;
+	import weave.api.core.IDisposableObject;
 	import weave.api.core.ILinkableObjectWithBusyStatus;
 	import weave.api.data.IProjectionManager;
 	import weave.api.data.IProjector;
@@ -42,11 +47,17 @@ package weave.visualization.plotters
 	import weave.api.registerLinkableChild;
 	import weave.api.services.IWMSService;
 	import weave.core.LinkableBoolean;
+	import weave.core.LinkableDynamicObject;
 	import weave.core.LinkableNumber;
 	import weave.core.LinkableString;
+	import weave.core.SessionManager;
 	import weave.primitives.Bounds2D;
+	import weave.services.wms.CustomWMS;
 	import weave.services.wms.ModestMapsWMS;
 	import weave.services.wms.OnEarthProvider;
+	import weave.services.wms.OpenMapQuestAerialProvider;
+	import weave.services.wms.OpenMapQuestProvider;
+	import weave.services.wms.StamenProvider;
 	import weave.services.wms.WMSProviders;
 	import weave.services.wms.WMSTile;
 	import weave.utils.Dictionary2D;
@@ -58,7 +69,7 @@ package weave.visualization.plotters
 	 * @author kmonico
 	 * @author skolman
 	 */
-	public class WMSPlotter extends AbstractPlotter implements ILinkableObjectWithBusyStatus
+	public class WMSPlotter extends AbstractPlotter implements ILinkableObjectWithBusyStatus, IDisposableObject
 	{
 		// TODO: move the image reprojection code elsewhere
 		
@@ -70,12 +81,59 @@ package weave.visualization.plotters
 			_textField.background = true;
 			_textField.backgroundColor = 0x000000;
 			_textField.alpha = 0.2;
+			
+			//setting default WMS Map to Blue Marble
+			setProvider(WMSProviders.BLUE_MARBLE_MAP);
 		}
 
 		// the service and its parameters
-		private var _service:IWMSService = null;
+		private function get _service():IWMSService
+		{
+			return service.internalObject as IWMSService;
+		}
+		
+		public function get providerName():String
+		{
+			if(service.internalObject == null)
+				return null;
+			var provider:* = (service.internalObject as IWMSService).getProvider();
+			
+			if(provider is String)
+			{
+				return provider as String;
+			}else
+			{
+				if(provider is BlueMarbleMapProvider)
+					return WMSProviders.BLUE_MARBLE_MAP;
+				else if(provider is OnEarthProvider)
+					return WMSProviders.NASA;
+				else if(provider is OpenStreetMapProvider)
+					return WMSProviders.OPEN_STREET_MAP;
+				else if(provider is OpenMapQuestProvider)
+					return WMSProviders.MAPQUEST;
+				else if(provider is OpenMapQuestAerialProvider)
+					return WMSProviders.MAPQUEST_AERIAL;
+				else if(provider is StamenProvider)
+				{
+					var stamenProvider:StamenProvider = provider as StamenProvider;
+					if(stamenProvider.style == StamenProvider.STYLE_TERRAIN)
+						return WMSProviders.STAMEN_TERRAIN;
+					if(stamenProvider.style == StamenProvider.STYLE_TONER)
+						return WMSProviders.STAMEN_TONER;
+					if(stamenProvider.style == StamenProvider.STYLE_WATERCOLOR)
+						return WMSProviders.STAMEN_WATERCOLOR;
+				}
+				else if(provider is CustomWMS)
+					return WMSProviders.CUSTOM_MAP;
+			}
+			
+			return null;
+		}
+		
+		public const service:LinkableDynamicObject = registerSpatialProperty(new LinkableDynamicObject(IWMSService));
+		
 		public const preferLowerQuality:LinkableBoolean = registerLinkableChild(this, new LinkableBoolean(false));
-		public const serviceName:LinkableString = registerSpatialProperty(new LinkableString(WMSProviders.BLUE_MARBLE_MAP, verifyServiceName), setProvider);
+//		public const serviceName:LinkableString = registerSpatialProperty(new LinkableString(WMSProviders.BLUE_MARBLE_MAP, verifyServiceName), setProvider);
 		public const srs:LinkableString = newSpatialProperty(LinkableString); // needed for linking MapTool settings
 		public const styles:LinkableString = newLinkableChild(this, LinkableString, setStyle); // needed for changing seasons
 		public const displayMissingImage:LinkableBoolean = newLinkableChild(this, LinkableBoolean);
@@ -84,6 +142,7 @@ package weave.visualization.plotters
 		private const _tempMatrix:Matrix = new Matrix(); 
 		private const _tempDataBounds:IBounds2D = new Bounds2D();
 		private const _tempScreenBounds:IBounds2D = new Bounds2D();
+		private const _tempBackgroundDataBounds:IBounds2D = new Bounds2D();
 		private const _clipRectangle:Rectangle = new Rectangle();
 		
 		// used to show a missing image
@@ -227,7 +286,7 @@ package weave.visualization.plotters
 			
 			//// THERE IS A PROJECTION
 			
-			var bgDataBounds:IBounds2D = getBackgroundDataBounds(); // temp solution, slightly inefficient
+			getBackgroundDataBounds(_tempBackgroundDataBounds);
 
 			_tempDataBounds.copyFrom(dataBounds);
 			_tempScreenBounds.copyFrom(screenBounds);
@@ -236,7 +295,7 @@ package weave.visualization.plotters
 			if (areProjectionsDifferent && mapProjExists) 
 			{
 				// make sure _tempDataBounds is within the valid range
-				bgDataBounds.constrainBounds(_tempDataBounds, false);
+				_tempBackgroundDataBounds.constrainBounds(_tempDataBounds, false);
 				_tempDataBounds.centeredResize(_tempDataBounds.getWidth() - ProjConstants.EPSLN, _tempDataBounds.getHeight() - ProjConstants.EPSLN);
 				
 				// calculate screen bounds that corresponds to _tempDataBounds
@@ -320,7 +379,7 @@ package weave.visualization.plotters
 				);
 
 				// calculate clip rectangle for nasa service because tiles go outside the lat/long bounds
-				_tempBounds.copyFrom(_service.getAllowedBounds()); // data
+				_service.getAllowedBounds(_tempBounds); // data
 				dataBounds.projectCoordsTo(_tempBounds, screenBounds); // data to screen
 				_tempBounds.getRectangle(_clipRectangle); // get screen rect
 				_clipRectangle.x = Math.floor(_clipRectangle.x);
@@ -334,39 +393,40 @@ package weave.visualization.plotters
 			drawCreditText(destination);
 		}
 		
-		private var _providerCredit:String = '';
 		private const _textField:TextField = new TextField(); // reusable object
 		private function drawCreditText(destination:BitmapData):void
 		{
-			_textField.text = _providerCredit;
-			_tempMatrix.identity();
-			_tempMatrix.translate(0, destination.height - _textField.height);
-			destination.draw(_textField, _tempMatrix);		
+			var _providerCredit:String = _service.getCreditInfo();
+			if (_providerCredit)
+			{
+				_textField.text = _providerCredit;
+				_tempMatrix.identity();
+				_tempMatrix.translate(0, destination.height - _textField.height);
+				destination.draw(_textField, _tempMatrix);
+			}
 		}
 
 		/**
 		 * Set the provider for the plotter.
 		 */
-		private function setProvider():void
+		public function setProvider(provider:String):void
 		{
-			var provider:String = serviceName.value;
-			
-			if (_service != null)
-			{
-				disposeObjects(_service);
-			}
+			if(!verifyServiceName(provider))
+				return;
 			
 			if (provider == WMSProviders.NASA)
 			{
-				_service = newSpatialProperty(OnEarthProvider);
-			}			
+				service.requestLocalObject(OnEarthProvider,false);
+			}
+			else if(provider == WMSProviders.CUSTOM_MAP)
+			{
+				service.requestLocalObject(CustomWMS,false);
+			}
 			else
 			{
-				_service = newSpatialProperty(ModestMapsWMS);
+				service.requestLocalObject(ModestMapsWMS,false);
 				_service.setProvider(provider);
 			}
-			
-			_providerCredit = _service.getCreditInfo();
 			
 			// determine maximum bounds for reprojecting images
 			_allowedTileReprojBounds.copyFrom(_latLonBounds);
@@ -374,32 +434,29 @@ package weave.visualization.plotters
 			spatialCallbacks.triggerCallbacks();
 		}
 		
-		override public function getBackgroundDataBounds():IBounds2D
+		override public function getBackgroundDataBounds(output:IBounds2D):void
 		{
-			var bounds:IBounds2D = getReusableBounds();
+			output.reset();
 			if (_service != null)
 			{
 				// determine bounds of plotter
-				bounds.copyFrom(_service.getAllowedBounds());
+				_service.getAllowedBounds(output);
 				
 				var serviceSRS:String = _service.getProjectionSRS();
 				if (serviceSRS != srs.value
 					&& projManager.projectionExists(srs.value)
 					&& projManager.projectionExists(serviceSRS))
 				{
-					projManager.transformBounds(_service.getProjectionSRS(), srs.value, bounds);
+					projManager.transformBounds(_service.getProjectionSRS(), srs.value, output);
 				}
 			}
-			
-			return bounds;
 		}
 		
-		override public function dispose():void
+		public function dispose():void
 		{
 			if (_service != null)
 				_service.cancelPendingRequests(); // cancel everything to prevent any callbacks from running
-			
-			super.dispose();
+			WeaveAPI.SessionManager.disposeObjects(_service);
 		}
 
 		/**
@@ -428,6 +485,7 @@ package weave.visualization.plotters
 		{
 			return false;
 		}
+		[Deprecated(replacement="service")] public function set serviceName(value:String):void { setProvider(value); }
 	}
 }
 

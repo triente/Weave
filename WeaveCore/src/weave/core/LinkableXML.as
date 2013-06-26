@@ -28,17 +28,29 @@ package weave.core
 	 * a copy of the XML that you set as the session state.
 	 * 
 	 * @author adufilie
+	 * @see weave.core.LinkableVariable
 	 */
 	public class LinkableXML extends LinkableVariable
 	{
 		public function LinkableXML(allowNull:Boolean = true)
 		{
-			super(String, allowNull ? null : notNull);
+			super(String, verifyXMLString);
+			_allowNull = allowNull;
 		}
 		
-		private function notNull(value:Object):Boolean
+		private var _allowNull:Boolean;
+		
+		private function verifyXMLString(value:String):Boolean
 		{
-			return value != null;
+			if (value == null)
+				return _allowNull;
+			
+			try {
+				XML(value);
+				return true;
+			}
+			catch (e:*) { }
+			return false;
 		}
 
 		/**
@@ -86,6 +98,8 @@ package weave.core
 		{
 			if (value && value.hasOwnProperty(XML_STRING))
 				value = value[XML_STRING];
+			if (value is XML)
+				value = (value as XML).toXMLString();
 			super.setSessionState(value);
 		}
 		

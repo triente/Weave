@@ -59,46 +59,59 @@ package weave.ui
 			
 			var type:String;
 			for each (type in openMenuEventTypes)
-				_uiParent.addEventListener(type, openSubMenu);
+			{
+				if (closeMenuEventTypes && closeMenuEventTypes.indexOf(type) >= 0)
+					_uiParent.addEventListener(type, toggleSubMenu);
+				else
+					_uiParent.addEventListener(type, openSubMenu);
+			}
 			for each (type in closeMenuEventTypes)
-				_uiParent.addEventListener(type, closeSubMenu);
+			{
+				if (openMenuEventTypes && !openMenuEventTypes.indexOf(type) >= 0)
+					_uiParent.addEventListener(type, closeSubMenu);
+			}
 			
 			includeInLayout = false;
 			tabEnabled = false;
 			owner = DisplayObjectContainer(WeaveAPI.topLevelApplication);
 			showRoot = false; //test this
+			
+			addEventListener(MenuEvent.ITEM_CLICK,handleSubMenuItemClick);
+			this.labelFunction = getLabel;
+		}
+		
+		private function getLabel(item:SubMenuItem):String
+		{
+			return String(item.label is Function ? item.label() : item.label);
 		}
 		
 		private var _uiParent:UIComponent = null;
-		
-		//		private var subMenu:Menu;
 		
 		private var subMenuDataProvider:Array = [];
 		
 		/**
 		 * Adds an item to the menu.
-		 * @param label The Label string to show when the menu is open
+		 * @param label The Label string (or function that returns a string) to show when the menu is open.
 		 * @param listener The function to call when the item is clicked.
 		 * @param params An Array of parameters to pass to the listener function.
+		 * @param shown A function that returns a boolean that determines whether the menu item should be shown.
+		 * @return An object containing the three parameters (label, listener, params) which can be modified later.
 		 */
-		public function addSubMenuItem(label:String,listener:Function,params:Array=null):void
+		public function addSubMenuItem(label:Object, listener:Function, params:Array = null, shown:Function = null):Object
 		{
 			var menuItem:SubMenuItem = new SubMenuItem();
 			menuItem.label = label;
 			menuItem.listener = listener;
 			menuItem.params = params;
-			
+			menuItem.shown = shown;
 			subMenuDataProvider.push(menuItem);
-			
-			//			subMenu = Menu.createMenu(_uiParent,subMenuDataProvider,false);
-			
-			
-			addEventListener(MenuEvent.ITEM_CLICK,handleSubMenuItemClick);
-			
-			addEventListener(MenuEvent.MENU_HIDE,function():void{toggleSubMenu = false;});
-			
-			
+			return menuItem;
 		}
+		
+		public static const LABEL:String = 'label';
+		public static const LISTENER:String = 'listener';
+		public static const PARAMS:String = 'params';
+		public static const SHOWN:String = 'shown';
 		
 		/**
 		 * Removes all menu items
@@ -114,7 +127,14 @@ package weave.ui
 			item.listener.apply(null, item.params);
 		}
 		
-		private var toggleSubMenu:Boolean =  false;
+		private function toggleSubMenu(event:Event = null):void
+		{
+			if (visible)
+				hide();
+			else
+				openSubMenu(event);
+		}
+		
 		private function openSubMenu(event:Event = null):void
 		{
 			// work around bug where menu doesn't open on mouseDown
@@ -124,21 +144,7 @@ package weave.ui
 				return;
 			}
 			
-			if(toggleSubMenu)
-			{
-				toggleSubMenu = false;
-				return;
-			}
-			
-			toggleSubMenu = true;
-			
-			//			if(subMenuDataProvider.length == 0)
-			//				subMenu = Menu.createMenu(_uiParent,new SubMenuItem(),false);
-			
-			
 			showSubMenu();
-			
-			
 		}
 		
 		private function closeSubMenu(event:Event):void
@@ -151,7 +157,6 @@ package weave.ui
 			var menuLocation:Point = _uiParent.localToGlobal(new Point(0,_uiParent.height));
 			
 			var stage:Stage = WeaveAPI.topLevelApplication.stage;
-			var tempBounds:Bounds2D = new Bounds2D();
 			tempBounds.setBounds(0, 0, stage.stageWidth, stage.stageHeight);
 			
 			var xMin:Number = tempBounds.getXNumericMin();
@@ -160,7 +165,7 @@ package weave.ui
 			var yMax:Number = tempBounds.getYNumericMax();
 			
 			setStyle("openDuration",0);
-			popUpMenu(this, _uiParent, subMenuDataProvider);
+			popUpMenu(this, _uiParent, subMenuDataProvider.filter(isItemShown));
 			show(menuLocation.x, menuLocation.y);
 			
 			if (menuLocation.x < xMin)
@@ -173,15 +178,22 @@ package weave.ui
 			else if (menuLocation.y + height > yMax)
 				menuLocation.y -= height + _uiParent.height;
 			
-			move(menuLocation.x,menuLocation.y);
+			move(menuLocation.x, menuLocation.y);
 		}
 		
+		private function isItemShown(item:SubMenuItem, ..._):Boolean
+		{
+			return getLabel(item) && (item.shown == null || item.shown());
+		}
+		
+		private const tempBounds:Bounds2D = new Bounds2D();
 	}
 }
 
 internal class SubMenuItem
 {
-	public var label:String;
+	public var label:Object;
 	public var listener:Function;
 	public var params:Array;
+	public var shown:Function;
 }

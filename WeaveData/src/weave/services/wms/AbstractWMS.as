@@ -55,7 +55,7 @@ package weave.services.wms
 		protected var _srs:String = null; // mercator for ModestMaps, lat/lon for nasa
 		
 		// dictionary mapping request strings to WMSTile objects
-		protected const _urlToTile:Dictionary = new Dictionary(true);
+		protected var _urlToTile:Dictionary = new Dictionary(true);
 				
 		// reusable objects
 		protected const _tempPoint:Point = new Point();
@@ -154,9 +154,9 @@ package weave.services.wms
 		 * Return the allowed bounds.
 		 * @see weave.api.core.IWMSService#getAllowedBounds
 		 */ 
-		/* abstract */ public function getAllowedBounds():IBounds2D
+		public function getAllowedBounds(output:IBounds2D):void
 		{
-			return null;
+			output.reset();
 		}
 		
 		/* abstract */ public function setProvider(provider:String):void
@@ -168,11 +168,6 @@ package weave.services.wms
 		{
 			reportError("Attempt to get the provider of AbstractWMS.");
 			return null;
-		}
-		
-		public function clearTilingIndex():void
-		{
-			_currentTileIndex = new WMSTileIndex();
 		}
 		
 		/**

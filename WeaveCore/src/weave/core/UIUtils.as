@@ -22,7 +22,9 @@ package weave.core
 	import flash.display.DisplayObject;
 	import flash.display.DisplayObjectContainer;
 	import flash.events.Event;
+	import flash.events.TimerEvent;
 	import flash.utils.Dictionary;
+	import flash.utils.Timer;
 	
 	import mx.core.IUIComponent;
 	import mx.core.IVisualElement;
@@ -37,6 +39,7 @@ package weave.core
 	import weave.api.core.ILinkableVariable;
 	import weave.api.getCallbackCollection;
 	import weave.api.objectWasDisposed;
+
 	import weave.api.ui.ILinkableLayoutManager;
 	import weave.utils.Dictionary2D;
 
@@ -44,6 +47,7 @@ package weave.core
 	 * This is an all-static class containing functions related to UI and ILinkableObjects.
 	 * 
 	 * @author adufilie
+	 * @author pkovac
 	 */
 	public class UIUtils
 	{
@@ -56,6 +60,36 @@ package weave.core
 		{
 			var focus:DisplayObject = component.getFocus();
 			return focus && component.contains(focus);
+		}
+		
+		/**
+		 * @param component
+		 * @param steps
+		 * @param interval
+		 * @author pkovac
+		 */		
+		public static function componentPulse(component:UIComponent, steps:Number = 15, interval:Number = 30):void
+		{
+			var anim:Timer = new Timer(interval, steps);
+			/* TODO: Find out what class actually has the "focusAlpha" style */
+			function clearPulseHandler(e:TimerEvent):void
+			{
+				if (!hasFocus(component))
+					component.drawFocus(false); /* Don't turn off the focus style 
+				if somehow it was acquired during the pulse */
+				component.setStyle("focusAlpha", 0.4); /* reset focusAlpha to default */
+			}
+			function pulsingHandler(e:TimerEvent):void
+			{
+				var step:Number = (e.target as Timer).currentCount;
+				if (step > (steps/2)) step = steps - step;
+				component.setStyle("focusAlpha", step/(steps/2));
+				component.drawFocus(true); /* is this really needed? */
+			}
+			anim.addEventListener(TimerEvent.TIMER, pulsingHandler);
+			anim.addEventListener(TimerEvent.TIMER_COMPLETE, clearPulseHandler);
+			anim.start();
+			return;
 		}
 		
 		/**
@@ -403,7 +437,7 @@ package weave.core
 			var uiChild:DisplayObject;
 			// get all child DisplayObjects we are interested in
 			var uiChildren:Array = hashMap.getObjects();
-			for (i = uiChildren.length - 1; i >= 0; i--)
+			for (i = uiChildren.length; i--;)
 			{
 				var wrapper:ILinkableDisplayObject = uiChildren[i] as ILinkableDisplayObject;
 				if (wrapper)
@@ -421,7 +455,7 @@ package weave.core
 			{
 				// set child index values in reverse order so all the sessioned children will appear on top
 				var indexOffset:int = uiParent.numChildren - uiChildren.length;
-				for (i = uiChildren.length - 1; i >= 0; i--)
+				for (i = uiChildren.length; i--;)
 				{
 					uiChild = uiChildren[i] as DisplayObject;
 					if (uiChild && uiParent == uiChild.parent && uiParent.getChildIndex(uiChild) != indexOffset + i)

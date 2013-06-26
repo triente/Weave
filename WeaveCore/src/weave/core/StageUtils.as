@@ -121,7 +121,7 @@ package weave.core
 		private const _priorityCallLaterQueues:Array = [[], [], [], []];
 		private var _activePriority:uint = WeaveAPI.TASK_PRIORITY_IMMEDIATE + 1; // task priority that is currently being processed
 		private const _priorityElapsedTimes:Array = [0, 0, 0, 0]; // An Array of elapsed times corresponding to callLater queues.
-		private const _priorityAllocatedTimes:Array = [int.MAX_VALUE, 75, 50, 25]; // An Array of allocated times corresponding to callLater queues.
+		private const _priorityAllocatedTimes:Array = [int.MAX_VALUE, 100, 65, 35]; // An Array of allocated times corresponding to callLater queues.
 
 		/**
 		 * This gets the maximum milliseconds spent per frame performing asynchronous tasks.
@@ -166,24 +166,21 @@ package weave.core
 		[Bindable] public var maxComputationTimePerFrame:uint = 100;
 		
 		/**
-		 * This is the last keyboard event that occurred on the stage.
-		 * This variable is set while callbacks are running and is cleared immediately after.
+		 * @inheritDoc
 		 */
 		public function get keyboardEvent():KeyboardEvent
 		{
 			return _event as KeyboardEvent;
 		}
 		/**
-		 * This is the last mouse event that occurred on the stage.
-		 * This variable is set while callbacks are running and is cleared immediately after.
+		 * @inheritDoc
 		 */
 		public function get mouseEvent():MouseEvent
 		{
 			return _event as MouseEvent;
 		}
 		/**
-		 * This is the last event that occurred on the stage.
-		 * This variable is set while callbacks are running and is cleared immediately after.
+		 * @inheritDoc
 		 */
 		public function get event():Event
 		{
@@ -191,21 +188,21 @@ package weave.core
 		}
 		
 		/**
-		 * @return The current pressed state of the ctrl key.
+		 * @inheritDoc
 		 */
 		public function get shiftKey():Boolean
 		{
 			return _shiftKey;
 		}
 		/**
-		 * @return The current pressed state of the ctrl key.
+		 * @inheritDoc
 		 */
 		public function get altKey():Boolean
 		{
 			return _altKey;
 		}
 		/**
-		 * @return The current pressed state of the ctrl key.
+		 * @inheritDoc
 		 */
 		public function get ctrlKey():Boolean
 		{
@@ -213,7 +210,7 @@ package weave.core
 		}
 		
 		/**
-		 * @return The current pressed state of the mouse button.
+		 * @inheritDoc
 		 */
 		public function get mouseButtonDown():Boolean
 		{
@@ -221,7 +218,7 @@ package weave.core
 		}
 		
 		/**
-		 * @return true if the mouse was clicked without moving
+		 * @inheritDoc
 		 */
 		public function get pointClicked():Boolean
 		{
@@ -229,7 +226,7 @@ package weave.core
 		}
 		
 		/**
-		 * @return true if the mouse moved since the last frame.
+		 * @inheritDoc
 		 */
 		public function get mouseMoved():Boolean
 		{
@@ -239,7 +236,7 @@ package weave.core
 		}
 		
 		/**
-		 * This is the total time it took to process the previous frame.
+		 * @inheritDoc
 		 */
 		public function get previousFrameElapsedTime():int
 		{
@@ -247,7 +244,7 @@ package weave.core
 		}
 		
 		/**
-		 * This is the amount of time the current frame has taken to process so far.
+		 * @inheritDoc
 		 */
 		public function get currentFrameElapsedTime():int
 		{
@@ -305,7 +302,7 @@ package weave.core
 			}
 			
 			if (_previousFrameElapsedTime > 3000)
-				trace(_previousFrameElapsedTime);
+				trace('Previous frame took', _previousFrameElapsedTime, 'ms');
 			
 			// update mouse coordinates
 			_lastMousePoint.x = _stage.mouseX;
@@ -319,65 +316,75 @@ package weave.core
 		 */
 		private function handleCallLater():void
 		{
-			var args:Array;
-			var stackTrace:String;
-			var i:int;
-
-			// first run the functions that cannot be delayed more than one frame.
-			var calls:Array = _priorityCallLaterQueues[WeaveAPI.TASK_PRIORITY_IMMEDIATE] as Array;
-			if (calls.length > 0)
-			{
-				// reset the Array now because these function calls may cause more calls to be queued, which shouldn't be called immediately.
-				_priorityCallLaterQueues[WeaveAPI.TASK_PRIORITY_IMMEDIATE] = [];
-				for (i = 0; i < calls.length; i++)
-				{
-					if (debug_callLater)
-						DebugTimer.begin();
-					
-					// args: (relevantContext:Object, method:Function, parameters:Array, priority:uint = 0)
-					args = calls[i] as Array;
-					stackTrace = _stackTraceMap[args];
-					
-//					WeaveAPI.SessionManager.unassignBusyTask(args);
-					
-					// don't call the function if the relevantContext was disposed of.
-					if (!WeaveAPI.SessionManager.objectWasDisposed(args[0]))
-						(args[1] as Function).apply(null, args[2]);
-					
-					if (debug_callLater)
-						DebugTimer.end(stackTrace);
-				}
-			}
-			
 			if (UIComponentGlobals.callLaterSuspendCount > 0)
 				return;
-//			trace('-------');
-			var minPriority:int = WeaveAPI.TASK_PRIORITY_IMMEDIATE + 1;
+
+			// The variables countdown and lastPriority are used to avoid running newly-added tasks immediately.
+			// This avoids wasting time on async tasks that do nothing and return early, adding themselves back to the queue.
+
+			var args:Array;
+			var stackTrace:String;
+			var now:int;
 			var allStop:int = _currentFrameStartTime + maxComputationTimePerFrame;
+
+			_currentTaskStopTime = allStop; // make sure _iterateTask knows when to stop
+
+			// first run the functions that should be called before anything else.
+			var queue:Array = _priorityCallLaterQueues[WeaveAPI.TASK_PRIORITY_IMMEDIATE] as Array;
+			var countdown:int;
+			for (countdown = queue.length; countdown > 0; countdown--)
+			{
+				if (debug_callLater)
+					DebugTimer.begin();
+				
+				now = getTimer();
+				// stop when max computation time is reached for this frame
+				if (now > allStop)
+					return;
+				
+				// args: (relevantContext:Object, method:Function, parameters:Array, priority:uint = 0)
+				args = queue.shift();
+				stackTrace = _stackTraceMap[args];
+				
+//				WeaveAPI.SessionManager.unassignBusyTask(args);
+				
+				// don't call the function if the relevantContext was disposed.
+				if (!WeaveAPI.SessionManager.objectWasDisposed(args[0]))
+					(args[1] as Function).apply(null, args[2]);
+				
+				if (debug_callLater)
+					DebugTimer.end(stackTrace);
+			}
+			
+//			trace('-------');
+			
+			var minPriority:int = WeaveAPI.TASK_PRIORITY_IMMEDIATE + 1;
+			var lastPriority:int = _activePriority == minPriority ? _priorityCallLaterQueues.length - 1 : _activePriority - 1;
 			var pStart:int = getTimer();
 			var pAlloc:int = int(_priorityAllocatedTimes[_activePriority]);
 			var pElapsed:int = int(_priorityElapsedTimes[_activePriority]);
 			var pStop:int = Math.min(allStop, pStart + pAlloc - pElapsed);
-			var pQueue:Array = _priorityCallLaterQueues[_activePriority] as Array;
+			queue = _priorityCallLaterQueues[_activePriority] as Array;
+			countdown = queue.length;
 			while (true)
 			{
 				if (debug_callLater)
 					DebugTimer.begin();
 				
-				var now:int = getTimer();
-				if (now > pStop || pQueue.length == 0)
+				now = getTimer();
+				if (countdown == 0 || now > pStop)
 				{
 					// keep track of elapsed time for this priority
 					pElapsed += now - pStart;
 					_priorityElapsedTimes[_activePriority] = pElapsed;
 					
-					// if max computation time was reached for this frame, stop now
-					if (now > allStop)
-						break;
+					// if max computation time was reached for this frame or we have visited all priorities, stop now
+					if (now > allStop || _activePriority == lastPriority)
+						return;
 					
-					// see if there are any entries left in the queues
+					// see if there are any entries left in the queues (except for the immediate queue)
 					var remaining:int = 0;
-					for (i = minPriority; i < _priorityCallLaterQueues.length; i++)
+					for (var i:int = minPriority; i < _priorityCallLaterQueues.length; i++)
 						remaining += (_priorityCallLaterQueues[i] as Array).length;
 					// stop if no more entries
 					if (remaining == 0)
@@ -396,23 +403,26 @@ package weave.core
 					pAlloc = int(_priorityAllocatedTimes[_activePriority]);
 					pElapsed = int(_priorityElapsedTimes[_activePriority]);
 					pStop = Math.min(allStop, pStart + pAlloc - pElapsed);
-					pQueue = _priorityCallLaterQueues[_activePriority] as Array;
+					queue = _priorityCallLaterQueues[_activePriority] as Array;
+					countdown = queue.length;
 					
 					// restart loop to check stopping condition
 					continue;
 				}
+				
+				countdown--;
 				
 //				trace('p',_activePriority,pElapsed,'/',pAlloc);
 				_currentTaskStopTime = pStop; // make sure _iterateTask knows when to stop
 				
 				// call the next function in the queue
 				// args: (relevantContext:Object, method:Function, parameters:Array, priority:uint)
-				args = pQueue.shift() as Array;
+				args = queue.shift() as Array;
 				stackTrace = _stackTraceMap[args]; // check this for debugging where the call came from
 				
 //				WeaveAPI.SessionManager.unassignBusyTask(args);
 				
-				// don't call the function if the relevantContext was disposed of.
+				// don't call the function if the relevantContext was disposed.
 				if (!WeaveAPI.SessionManager.objectWasDisposed(args[0]))
 				{
 					// TODO: PROFILING: check how long this function takes to execute.
@@ -427,12 +437,7 @@ package weave.core
 		}
 		
 		/**
-		 * This calls a function in a future ENTER_FRAME event.  The function call will be delayed
-		 * further frames if the maxComputationTimePerFrame time limit is reached in a given frame.
-		 * @param relevantContext This parameter may be null.  If the relevantContext object gets disposed of, the specified method will not be called.
-		 * @param method The function to call later.
-		 * @param parameters The parameters to pass to the function.
-		 * @param priority The task priority, which should be one of the static constants in WeaveAPI.
+		 * @inheritDoc
 		 */
 		public function callLater(relevantContext:Object, method:Function, parameters:Array = null, priority:uint = 2):void
 		{
@@ -454,26 +459,33 @@ package weave.core
 		 * This will generate an iterative task function that is the combination of a list of tasks to be completed in order.
 		 * @param iterativeTasks An Array of iterative task functions.
 		 * @return A single iterative task function that invokes the other tasks to completion in order.
-		 *         The function will accept an optional <code>restart:Boolean</code> parameter, which when set to true will
+		 *         The function will accept a stopTime:int parameter which when set to -1 will
 		 *         reset the task counter to zero so the compound task will start from the first task again.
 		 * @see #startTask
 		 */
-		public static function generateCompoundIterativeTask(iterativeTasks:Array):Function
+		public static function generateCompoundIterativeTask(...iterativeTasks):Function
 		{
 			var iTask:int = 0;
-			return function(param:* = undefined):Number
+			return function(stopTime:int):Number
 			{
-				if (param === true) // restart
+				if (stopTime < 0) // restart
 				{
 					iTask = 0;
 					return 0;
 				}
-				
 				if (iTask >= iterativeTasks.length)
 					return 1;
 				
 				var iterate:Function = iterativeTasks[iTask] as Function;
-				var progress:Number = iterate.length ? iterate(param) : iterate();
+				var progress:Number;
+				if (iterate.length)
+				{
+					progress = iterate(stopTime);
+				}
+				else
+				{
+					while ((progress = iterate()) < 1 && getTimer() < stopTime) { }
+				}
 				var totalProgress:Number = (iTask + progress) / iterativeTasks.length;
 				if (progress == 1)
 					iTask++;
@@ -482,56 +494,17 @@ package weave.core
 		}
 		
 		/**
-		 * This will start an asynchronous task, calling iterativeTask() across multiple frames until it returns a value of 1 or the relevantContext object is disposed of.
-		 * @param relevantContext This parameter may be null.  If the relevantContext object gets disposed of, the task will no longer be iterated.
-		 * @param iterativeTask A function that performs a single iteration of the asynchronous task.
-		 *   This function must take zero or one parameter and return a number from 0.0 to 1.0 indicating the overall progress of the task.
-		 *   A return value below 1.0 indicates that the function should be called again to continue the task.
-		 *   When the task is completed, iterativeTask() should return 1.0.
-		 *   The optional parameter specifies the time when the function should return. If the function accepts the returnTime
-		 *   parameter, it will not be called repeatedly within the same frame even if it returns before the returnTime.
-		 *   Example:
-		 *       var array:Array = ['a','b','c','d'];
-		 *       var index:int = 0;
-		 *       function iterativeTask():Number // this may be called repeatedly in succession
-		 *       {
-		 *           if (index &gt;= array.length) // in case the length is zero
-		 *               return 1;
-		 * 
-		 *           trace(array[index]);
-		 * 
-		 *           index++;
-		 *           return index / array.length;  // this will return 1.0 on the last iteration.
-		 *       }
-		 *   Example 2:
-		 *       var array:Array = ['a','b','c','d'];
-		 *       var index:int = 0;
-		 *       function iterativeTaskWithTimer(returnTime:int):Number // this will be called only once in succession
-		 *       {
-		 *           for (; index &lt; array.length; index++)
-		 *           {
-		 *               if (getTimer() &gt; returnTime)
-		 *                   return index / array.length; // progress so far
-		 * 
-		 *               trace(array[index]);
-		 *           }
-		 *           return 1;
-		 *       }
-		 * @param priority The task priority, which should be one of the static constants in WeaveAPI.
-		 * @param finalCallback A function that should be called after the task is completed.
-		 * @see weave.api.WeaveAPI
+		 * @inheritDoc
 		 */
-		public function startTask(relevantContext:Object, iterativeTask:Function, priority:int, finalCallback:Function = null):void
+		public function startTask(relevantContext:Object, iterativeTask:Function, priority:uint, finalCallback:Function = null):void
 		{
 			// do nothing if task already active
 			if (WeaveAPI.ProgressIndicator.hasTask(iterativeTask))
 				return;
 			
-			WeaveAPI.SessionManager.assignBusyTask(iterativeTask, relevantContext as ILinkableObject);
-			
-			if (priority <= 0)
+			if (priority >= _priorityCallLaterQueues.length)
 			{
-				reportError("Task priority " + priority + " is not supported.");
+				reportError("Invalid priority value: " + priority);
 				priority = WeaveAPI.TASK_PRIORITY_BUILDING;
 			}
 			
@@ -541,12 +514,12 @@ package weave.core
 				_taskStartTime[iterativeTask] = getTimer();
 				_taskElapsedTime[iterativeTask] = 0;
 			}
-			WeaveAPI.ProgressIndicator.addTask(iterativeTask);
+			WeaveAPI.ProgressIndicator.addTask(iterativeTask, relevantContext as ILinkableObject);
 			
 			var useTimeParameter:Boolean = iterativeTask.length > 0;
 			
 			// Set relevantContext as null for callLater because we always want _iterateTask to be called later.
-			// This makes sure that the task is removed when the actual context is disposed of.
+			// This makes sure that the task is removed when the actual context is disposed.
 			callLater(null, _iterateTask, [relevantContext, iterativeTask, priority, finalCallback, useTimeParameter], priority);
 			//_iterateTask(relevantContext, iterativeTask, priority, finalCallback);
 		}
@@ -556,7 +529,7 @@ package weave.core
 		 */
 		private function _iterateTask(context:Object, task:Function, priority:int, finalCallback:Function, useTimeParameter:Boolean):void
 		{
-			// remove the task if the context was disposed of
+			// remove the task if the context was disposed
 			if (WeaveAPI.SessionManager.objectWasDisposed(context))
 			{
 				WeaveAPI.ProgressIndicator.removeTask(task);
@@ -604,7 +577,7 @@ package weave.core
 				{
 					// task is done, so remove the task
 					WeaveAPI.ProgressIndicator.removeTask(task);
-					// run final callback after task completes
+					// run final callback after task completes and is removed
 					if (finalCallback != null)
 						finalCallback();
 					return;
@@ -630,7 +603,7 @@ package weave.core
 				WeaveAPI.ProgressIndicator.updateTask(task, progress);
 			
 			// Set relevantContext as null for callLater because we always want _iterateTask to be called later.
-			// This makes sure that the task is removed when the actual context is disposed of.
+			// This makes sure that the task is removed when the actual context is disposed.
 			callLater(null, _iterateTask, arguments, priority);
 		}
 		
@@ -655,7 +628,6 @@ package weave.core
 				var cc:ICallbackCollection = _callbackCollections[POINT_CLICK_EVENT] as ICallbackCollection;
 				_pointClicked = true;
 				cc.triggerCallbacks();
-				cc.resumeCallbacks(true);
 			}
 			else
 			{
@@ -664,8 +636,7 @@ package weave.core
 		}
 		
 		/**
-		 * This is a list of eventType Strings that can be passed to addEventCallback().
-		 * @return An Array of Strings.
+		 * @inheritDoc
 		 */
 		public function getSupportedEventTypes():Array
 		{
@@ -782,13 +753,7 @@ package weave.core
 		}
 		
 		/**
-		 * WARNING: These callbacks will trigger on every mouse event that occurs on the stage.
-		 *          Developers should not add any callbacks that run computationally expensive code.
-		 * 
-		 * This function will add the given function as a callback.  The function must not require any parameters.
-		 * @param eventType The name of the event to add a callback for.
-		 * @param callback The function to call when an event of the specified type is dispatched from the stage.
-		 * @param runCallbackNow If this is set to true, the callback will be run immediately after it is added.
+		 * @inheritDoc
 		 */
 		public function addEventCallback(eventType:String, relevantContext:Object, callback:Function, runCallbackNow:Boolean = false):void
 		{
@@ -804,8 +769,7 @@ package weave.core
 		}
 		
 		/**
-		 * @param eventType The name of the event to remove a callback for.
-		 * @param callback The function to remove from the list of callbacks.
+		 * @inheritDoc
 		 */
 		public function removeEventCallback(eventType:String, callback:Function):void
 		{

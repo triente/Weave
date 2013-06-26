@@ -27,6 +27,7 @@
 	<mx:Script>
 		<![CDATA[
 			import weave.Weave;
+			import weave.api.copySessionState;
 			import weave.api.WeaveAPI;
 			import weave.api.core.ILinkableObject;
 			import weave.api.data.ColumnMetadata;
@@ -54,8 +55,8 @@
 			
 			WeaveAPI.registerImplementation(IVisTool, LineChartTool, lang("Line Chart"));
 			
-			[Bindable]
 			private var _plotter:ParallelCoordinatesPlotter = null;
+			
 			override protected function constructor():void
 			{
 				super.constructor();
@@ -67,11 +68,13 @@
 				
 				// lock dynamic objects into place
 				_plotter = initializePlotters(ParallelCoordinatesPlotter, true);
-				
 				// default axis values
 				yAxisPlotter.tickCountRequested.value = 5;
-				xAxisPlotter.forceTickCount.value = true;
-
+				
+				xAxisPlotter.setLabelFunction(_plotter.xAxisLabelFunction);
+				yAxisPlotter.setLabelFunction(_plotter.yAxisLabelFunction);
+				
+				
 				visualization.plotManager.includeNonSelectableLayersInAutoZoom.lock();
 				visualization.enableZoomAndPan.value = false;
 
@@ -85,7 +88,7 @@
 				linkSessionState(labelPlotter.zoomToSubset, _plotter.zoomToSubset);
 
 				getCallbackCollection(visualization.plotManager.zoomBounds).addGroupedCallback(this, updateAxes);
-			
+				
 				// BEGIN TEMPORARY SOLUTION
 				visualization.plotManager.marginLeftNumber.addGroupedCallback(this, updateAxes);
 				visualization.plotManager.marginBottomNumber.addGroupedCallback(this, updateAxes);
@@ -95,7 +98,18 @@
 				getCallbackCollection(_plotter).addGroupedCallback(this, updateAxes, true);
 				// END TEMPORARY SOLUTION
 				var self:* = this;
-				visualization.bottomMarginClickCallbacks.addImmediateCallback(this, function():void { AttributeSelectorPanel.openToolSelector(self, _plotter.columns); });
+				visualization.leftMarginClickCallbacks.addImmediateCallback(this, function():void {
+					if (_plotter.enableGroupBy.value)
+						AttributeSelectorPanel.openToolSelector(self, labelPlotter.text);
+					else
+						AttributeSelectorPanel.openToolSelector(self, _plotter.yData);
+				});
+				visualization.bottomMarginClickCallbacks.addImmediateCallback(this, function():void {
+					if (_plotter.enableGroupBy.value)
+						AttributeSelectorPanel.openToolSelector(self, _plotter.columns);
+					else
+						AttributeSelectorPanel.openToolSelector(self, _plotter.xData);
+				});
 				
 				var count:int = getDefaultColumnsOfMostCommonKeyType().length;
 				var columnsToInit:Array = [];
@@ -105,6 +119,7 @@
 					initColumnDefaults.apply(null, columnsToInit);
 				
 				_plotter.columns.addGroupedCallback(this, updateProbeColumns, true);
+				_plotter.xColumns.addGroupedCallback(this, updateProbeColumns,true);
 				_plotter.xData.addGroupedCallback(this, updateFilterText);
 				_plotter.xValues.addGroupedCallback(this, updateFilterText, true);
 				
@@ -113,17 +128,17 @@
 
 			public const includeToolAttributesInProbe:LinkableBoolean = registerLinkableChild(this, new LinkableBoolean(true), updateProbeColumns);
 			
-			public function getPlotter():ParallelCoordinatesPlotter
-			{
-				return _plotter;
-			}
-			
 			private function updateProbeColumns():void
 			{
 				if (includeToolAttributesInProbe.value)
 				{
 					visualization.additionalProbeColumns = _plotter.columns.getObjects(IAttributeColumn);
 					visualization.additionalProbeColumns.unshift(labelPlotter.text, colorColumn);
+					if(_plotter.usingXAttributes)
+					{
+						visualization.additionalProbeColumns = _plotter.xColumns.getObjects(IAttributeColumn);
+						visualization.additionalProbeColumns.unshift(labelPlotter.text, colorColumn);
+					}
 				}
 				else
 					visualization.additionalProbeColumns = null;
@@ -181,13 +196,10 @@
 			{
 				super.childrenCreated();
 				
-				xAxisPlotter.setLabelFunction(getColumnTitle);
 				xAxisPlotter.axisLabelRelativeAngle.value = -45;
 				xAxisPlotter.labelHorizontalAlign.value = BitmapText.HORIZONTAL_ALIGN_RIGHT;
 				xAxisPlotter.labelVerticalAlign.value = BitmapText.VERTICAL_ALIGN_TOP;
 				xAxisPlotter.labelDistanceIsVertical.value = false;
-				
-				yAxisPlotter.setLabelFunction(yAxisLabelFunction);
 				
 				visualization.plotManager.includeNonSelectableLayersInAutoZoom.value = false;
 				
@@ -211,11 +223,22 @@
 			
 			override public function getSelectableAttributeNames():Array
 			{
-				return [lang("Color"),lang("Label"),lang("Columns")];
+				var names:Array = [lang("Color"), lang("Label")];
+				if (_plotter.enableGroupBy.value)
+					names.push(lang("Y Column"), lang("X Column"), lang("Group by"));
+				else
+					names.push(lang("Y Values"), lang("X Values"));
+				
+				return names;
 			}
 			override public function getSelectableAttributes():Array
 			{
-				return [colorColumn,labelPlotter.text,_plotter.columns];
+				var attrs:Array = [colorColumn, labelPlotter.text];
+				if (_plotter.enableGroupBy.value)
+					attrs.push(_plotter.yData, _plotter.xData, _plotter.groupBy);
+				else
+					attrs.push(_plotter.columns, _plotter.xColumns);
+				return attrs;
 			}
 			
 			public function get colorColumn():DynamicColumn
@@ -223,33 +246,20 @@
 				return Weave.defaultColorDataColumn.internalDynamicColumn;
 			}
 			
-			private function getColumnTitle( index:Number ):String
+			private function getColumnObjects():Array
 			{
-				try {
-					var columns:Array = _plotter.columns.getObjects();
-					return ColumnUtils.getTitle(columns[index]);
-				} catch(e:Error) {}
-				return "";
+				return _plotter.xColumns.getObjects(IAttributeColumn);
 			}
 			
 			private static const tempBounds:Bounds2D = new Bounds2D(); // reusable temporary object
 			
-			private function yAxisLabelFunction(value:Number):String
-			{
-				var _columns:Array = _plotter.columns.getObjects();
-				if (_columns.length > 0)
-					return ColumnUtils.deriveStringFromNumber(_columns[0], value); // always use the first column to format the axis labels
-				return null;
-			}
 			
 			private function updateAxes():void
 			{
 				handlePanelTitleChange();
 				
 				var columns:Array = _plotter.columns.getObjects();
-				
-				xAxisPlotter.tickCountRequested.value = Math.max(2, columns.length);
-				
+			
 				// get bounds for y axis
 				visualization.plotManager.zoomBounds.getDataBounds(tempBounds);
 				tempBounds.xMax = tempBounds.xMin;
@@ -258,6 +268,21 @@
 				yAxisPlotter.axisLineMaxValue.value = tempBounds.yMax;
 			
 				yAxisPlotter.axisLineDataBounds.copyFrom(tempBounds);
+				
+				if(_plotter.usingXAttributes)
+				{
+					xAxisPlotter.axisLineMinValue.value = tempBounds.xMin;
+					xAxisPlotter.axisLineMaxValue.value = tempBounds.xMax;
+					xAxisPlotter.axisLineDataBounds.copyFrom(tempBounds);
+					xAxisPlotter.forceTickCount.value = false;
+					xAxisPlotter.tickCountRequested.value = 10;
+				}
+				else
+				{
+					xAxisPlotter.tickCountRequested.value = Math.max(2, columns.length);
+					xAxisPlotter.forceTickCount.value = true;
+				
+				}
 				
 				var xAxisName:String = '';
 				var yAxisName:String = '';
@@ -320,12 +345,13 @@
 				settings.selectable.lock();
 				
 				_plotter.columns.addImmediateCallback(this, updateColumns, true);
+				_plotter.xColumns.addImmediateCallback(this, updateColumns, true);
 
 				labelPlotter.xScreenOffset.value = 5;
 				labelPlotter.hAlign.defaultValue.value = BitmapText.HORIZONTAL_ALIGN_LEFT;
 				labelPlotter.hideOverlappingText.value = true;
 				linkSessionState(labelPlotter.dataY, labelPlotter.sortColumn);
-				labelPlotter.hack_setSingleKeySource(_plotter.keySet);
+				labelPlotter.hack_setSingleKeySource(_plotter.filteredKeySet);
 				getCallbackCollection(LinkableTextFormat.defaultTextFormat).addGroupedCallback(this, updateLabel, true);
 			}
 			private function updateLabel():void
@@ -336,12 +362,12 @@
 			private function updateColumns():void
 			{
 				var _columns:Array = _plotter.columns.getObjects();
-				var x:AlwaysDefinedColumn = labelPlotter.dataX.requestLocalObject(AlwaysDefinedColumn, false);
-				x.defaultValue.value = _columns.length;
+				var _xattrObjects:Array = _plotter.xColumns.getObjects();
 				
 				if (_columns.length == 0)
 				{
 					labelPlotter.dataY.removeObject();
+					labelPlotter.dataX.removeObject();
 					return;
 				}
 				var lastColumn:IAttributeColumn;
@@ -351,12 +377,23 @@
 					repeat = false;
 					if( _columns.length == 0 )
 						break;
-					x.defaultValue.value = (x.defaultValue.value as Number) - 1;
+					if(!_plotter.usingXAttributes)
+					{
+						var x:AlwaysDefinedColumn = labelPlotter.dataX.requestLocalObject(AlwaysDefinedColumn, false);
+					    x.defaultValue.value = (_columns.length) - 1;
+					}
+						
+					else
+					{
+						lastColumn= _xattrObjects.pop();
+						labelPlotter.dataX.requestLocalObjectCopy(lastColumn as ILinkableObject);
+					}
+					
+	
 					lastColumn= _columns.pop();
 					labelPlotter.dataY.requestLocalObjectCopy(lastColumn as ILinkableObject);
-					if( labelPlotter.dataY.keys[0] != undefined )
-						repeat = isNaN(lastColumn.getValueFromKey(labelPlotter.dataY.keys[0], Number));
-				} while (labelPlotter.dataY.keys[0] == undefined || repeat );
+					repeat = ( labelPlotter.dataY.keys.length == 0);
+				} while (repeat );
 
 				if (labelPlotter.text.getInternalColumn() == null)
 				{
@@ -379,7 +416,10 @@
 		<mx:VBox id="attributesPanel" label="{lang('Data')}">
 			<ui:DynamicColumnComponent visTool="{this}" label="{lang('Color')}" creationComplete="(event.target as DynamicColumnComponent).dynamicObject = colorColumn" showLinkControl="false"/>
 			<ui:DynamicColumnComponent visTool="{this}" label="{lang('Label')}" id="labelComponent"/>
-			<ui:ColumnListComponent visTool="{this}" label="{lang('Attributes along X axis')}" creationComplete="(event.target as ColumnListComponent).hashMap = _plotter.columns"/>
+<!--			<mx:TabNavigator width="100%" height="100%" creationPolicy="all"> -->
+			<ui:ColumnListComponent visTool="{this}"  creationComplete="(event.target as ColumnListComponent).hashMap = _plotter.columns"/>
+<!--			<ui:ColumnListComponent visTool="{this}"  creationComplete="(event.target as ColumnListComponent).hashMap = _plotter.xAttributeColumns"/>	
+			</mx:TabNavigator>-->
 			<mx:HBox>
 				<mx:CheckBox id="probeColumnsCheckBox" label="{lang('Include tool attributes in probe tooltip')}"
 							 toolTip="{lang('Checking this box makes all of the tool\'s attributes visible in this tool\'s probe tooltip')}"

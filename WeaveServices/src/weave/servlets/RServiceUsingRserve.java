@@ -29,6 +29,7 @@ import javax.script.ScriptException;
 import org.rosuda.REngine.REXP;
 import org.rosuda.REngine.REXPDouble;
 import org.rosuda.REngine.REXPInteger;
+import org.rosuda.REngine.REXPList;
 import org.rosuda.REngine.REXPLogical;
 import org.rosuda.REngine.REXPMismatchException;
 import org.rosuda.REngine.REXPString;
@@ -44,15 +45,8 @@ import weave.beans.RResult;
 import weave.utils.ListUtils;
 
 
- 
-/**
- * @author Andy
- *
- */
 public class RServiceUsingRserve 
 {
-	private static final long serialVersionUID = 1L;
-
 	public RServiceUsingRserve()
 	{
 	}
@@ -96,7 +90,9 @@ public class RServiceUsingRserve
 		{
 			str = String.format("jpeg(\"%s\")", dir + file);
 			evalScript(rConnection, str, showWarnings);
+			rConnection.eval(str = script);
 			
+			rConnection.eval(str = script);
 			rConnection.eval(str = "dev.off()");
 		}
 		catch (RserveException e)
@@ -114,15 +110,16 @@ public class RServiceUsingRserve
 	
 	private static REXP evalScript(RConnection rConnection, String script, boolean showWarnings) throws REXPMismatchException,RserveException
 	{
+		
 		REXP evalValue = null;
 		if (showWarnings)			
 			evalValue =  rConnection.eval("try({ options(warn=2) \n" + script + "},silent=TRUE)");
 		else
 			evalValue =  rConnection.eval("try({ options(warn=1) \n" + script + "},silent=TRUE)");
 		
+		
 		return evalValue;
 	}
-	
 	
 	/**
 	 * This will wrap an object in an REXP object.
@@ -132,11 +129,40 @@ public class RServiceUsingRserve
 	 */
 	private static REXP getREXP(Object object) throws RemoteException
 	{
+		/*
+		 * <p><table>
+		 *  <tr><td> null	<td> REXPNull
+		 *  <tr><td> boolean, Boolean, boolean[], Boolean[]	<td> REXPLogical
+		 *  <tr><td> int, Integer, int[], Integer[]	<td> REXPInteger
+		 *  <tr><td> double, Double, double[], double[][], Double[]	<td> REXPDouble
+		 *  <tr><td> String, String[]	<td> REXPString
+		 *  <tr><td> byte[]	<td> REXPRaw
+		 *  <tr><td> Enum	<td> REXPString
+		 *  <tr><td> Object[], List, Map	<td> REXPGenericVector
+		 *  <tr><td> RObject, java bean (experimental)	<td> REXPGenericVector
+		 *  <tr><td> ROpaque (experimental)	<td> only function arguments (REXPReference?)
+		 *  </table>
+		 */
+		
 		// if it's an array...
 		if (object instanceof Object[])
 		{
 			Object[] array = (Object[])object;
-			if (array[0] instanceof Object[]) // 2-d matrix
+			if (array.length == 0)
+			{
+				return new REXPList(new RList());
+			}
+			else if (array[0] instanceof String)
+			{
+				String[] strings = ListUtils.copyStringArray(array, new String[array.length]);
+				return new REXPString(strings);
+			}
+			else if (array[0] instanceof Number)
+			{
+				double[] doubles = ListUtils.copyDoubleArray(array, new double[array.length]);
+				return new REXPDouble(doubles);
+			}
+			else if (array[0] instanceof Object[]) // 2-d matrix
 			{
 				// handle 2-d matrix
 				RList rList = new RList();
@@ -148,18 +174,6 @@ public class RServiceUsingRserve
 				} catch (REXPMismatchException e) {
 					throw new RemoteException("Failed to Create Dataframe",e);
 				}
-
-		
-			}
-			else if (array[0] instanceof String)
-			{
-				String[] strings = ListUtils.copyStringArray(array, new String[array.length]);
-				return new REXPString(strings);
-			}
-			else if (array[0] instanceof Number)
-			{
-				double[] doubles = ListUtils.copyDoubleArray(array, new double[array.length]);
-				return new REXPDouble(doubles);
 			}
 			else
 				throw new RemoteException("Unsupported value type");
@@ -180,7 +194,7 @@ public class RServiceUsingRserve
 	
 	
 	private static  void evaluvateInputScript(RConnection rConnection,String script,Vector<RResult> resultVector,boolean showIntermediateResults,boolean showWarnings ) throws ScriptException, RserveException, REXPMismatchException{
-		evalScript(rConnection, script, showWarnings);
+		/* REXP evalValue = */ evalScript(rConnection, script, showWarnings);
 		if (showIntermediateResults){
 			Object storedRdatas = evalScript(rConnection, "ls()", showWarnings);
 			if(storedRdatas instanceof REXPString){
@@ -197,6 +211,15 @@ public class RServiceUsingRserve
 				}
 			}			
 		}
+		
+		//To do find a better way of doing this
+//		if(evalValue.isList())
+//		{
+//			Vector<String> names = evalValue.asList().names;
+//			resultVector.add(new RResult("columnNames" ,names ));
+//			resultVector.add(new RResult("columnValues" ,rexp2javaObj(evalValue) ));		
+//		}
+		
 	}
 	
 	

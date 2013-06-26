@@ -61,6 +61,13 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 									   mouseDown="handleMouseDown()"
 									   click="handleMouseClick()"
 									   />
+		<mx:HBox id="tooManyRecordsIndicator" visible="false" includeInLayout="false" width="100%" horizontalGap="0">
+			<mx:Spacer width="100%"/>
+			<mx:Label id="maxRowsLabel"/>
+			<ui:HelpComponent>
+				The table is currently hiding some of the records, as the amount has exceeded the tables capability for dealing with it efficiently.
+			</ui:HelpComponent>
+		</mx:HBox>
 		
 		<mx:HBox id="bottomControls" width="100%" paddingTop="3" paddingLeft="3" paddingBottom="3" paddingRight="3">
 			<mx:Button label="{lang('Export Data...')}" click="saveToFileAsCSV()" />
@@ -87,6 +94,8 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import mx.events.FlexEvent;
 			import mx.events.IndexChangedEvent;
 			import mx.events.ResizeEvent;
+			import mx.events.ListEvent;
+
 			
 			import weave.Weave;
 			import weave.api.WeaveAPI;
@@ -105,6 +114,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.api.registerLinkableChild;
 			import weave.api.reportError;
 			import weave.api.ui.IVisTool;
+			import weave.compiler.StandardLib;
 			import weave.core.LinkableBoolean;
 			import weave.core.LinkableFunction;
 			import weave.core.LinkableHashMap;
@@ -118,6 +128,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			import weave.data.AttributeColumns.SecondaryKeyNumColumn;
 			import weave.data.KeySets.KeyFilter;
 			import weave.data.KeySets.KeySet;
+			import weave.primitives.ColorRamp;
 			import weave.ui.AttributeSelectorPanel;
 			import weave.ui.CustomDataGrid.IFilterComponent;
 			import weave.ui.CustomDataGrid.SearchFilterComponent;
@@ -132,9 +143,12 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			
 			WeaveAPI.registerImplementation(IVisTool, DataTableTool, "Data Table");
 			
+			public const colorRamp:ColorRamp = newLinkableChild(this, ColorRamp);
 			public const columns:LinkableHashMap = registerLinkableChild(this, new LinkableHashMap(IAttributeColumn));
 			public const columnWidths:LinkableHashMap = registerLinkableChild(this, new LinkableHashMap(LinkableString));
 			public const filterComponents:LinkableHashMap = registerLinkableChild(this,new LinkableHashMap(IFilterComponent));	
+			public const enableProbing:LinkableBoolean = registerLinkableChild(this, new LinkableBoolean(false));
+
 			private const dataGridColumns:Dictionary = new Dictionary();
 			private var _currentDataGridColumns:Array = [];
 			
@@ -143,6 +157,9 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			
 			private var _subset:KeyFilter = Weave.defaultSubsetKeyFilter;
 			private var _selection:KeySet = Weave.defaultSelectionKeySet;
+			private var _probe:KeySet = Weave.defaultProbeKeySet;
+			private var _lastHighlighted:IQualifiedKey;
+
 			private var colorColumn:ColorColumn = Weave.defaultColorColumn;
 			
 			public const sortFieldIndex:LinkableNumber = registerLinkableChild(this, new LinkableNumber(0));
@@ -150,6 +167,8 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			
 			private const dataRowKeys:ArrayCollection = new ArrayCollection([]);	
 			public const exportKeys:LinkableBoolean = registerLinkableChild(this, new LinkableBoolean(true));
+			
+			public const maxRows:LinkableNumber = registerLinkableChild(this, new LinkableNumber(5000));
 			
 			override protected function constructor():void
 			{
@@ -169,10 +188,10 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				}
 				getCallbackCollection(this).addImmediateCallback(this, invalidateDisplayList);
 				_selection.addImmediateCallback(this,invalidateDisplayList);
+				_probe.addImmediateCallback(this,updateGlobalProbeChangeLater);
 				colorColumn.addImmediateCallback(this,invalidateDisplayList);
 				getCallbackCollection(LinkableTextFormat.defaultTextFormat).addImmediateCallback(this,invalidateDisplayList);				
 			}
-			
 			
 			override protected function childrenCreated():void
 			{
@@ -181,10 +200,15 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				linkBindableProperty(showControls, showControlsCheckBox, "selected");
 				linkBindableProperty(showFilters, showFiltersCheckBox, "selected");
 				linkBindableProperty(showColors,showColorsCheckBox,"selected");
+				linkBindableProperty(enableProbing, enableProbingCheckBox, "selected");
+
 				linkBindableProperty(dataGridHorizontalScrollPosition, dataGrid, 'horizontalScrollPosition', 0, true);
 				linkBindableProperty(dataGridVerticalScrollPosition, dataGrid, 'verticalScrollPosition', 0, true);
 				
 				
+				dataGrid.addEventListener(ListEvent.ITEM_ROLL_OVER, handleRollOver);
+				dataGrid.addEventListener(MouseEvent.ROLL_OUT, handleRollOut);
+
 				dataGrid.addEventListener(DataGridEvent.COLUMN_STRETCH, handleColumnStretch);
 				dataGrid.addEventListener(ResizeEvent.RESIZE, handleToolResize);
 				
@@ -194,6 +218,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				UIUtils.linkDisplayObjects(filterControls,filterComponents);
 				
 			}
+
 			
 			/**
 			 * This function(event ListeSner) gets called during dataGrid Resize event
@@ -219,6 +244,28 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 					dataGrid.headerHeight = 50;
 				}
 
+			}
+			
+			private function handleRollOver(event:ListEvent):void // Probe
+			{
+				if (enableProbing.value == false) return;
+
+				var index:int = event.rowIndex;
+				var obj:Object = (dataGrid.dataProvider as ArrayCollection).getItemAt( index );
+				var key:IQualifiedKey = obj as IQualifiedKey;
+
+				_probe.replaceKeys([key]);
+			}
+			private function handleRollOut(event:MouseEvent):void // Unprobe
+			{
+				if (enableProbing.value == false) return;
+				
+				_probe.clearKeys();
+			}
+			private function handleItemHandleRollOut(event:ListEvent):void
+			{
+				if ((dataGrid.mouseY < dataGrid.headerHeight) || (dataGrid.mouseX > dataGrid.width - 16))
+					handleRollOut(null);
 			}
 			
 			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void{
@@ -287,6 +334,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				{
 					dataGrid.setStyle("alternatingItemColors", [backgroundColor1.value, backgroundColor2.value]);
 				}
+				updateGlobalProbeChangeLater();
 			}
 			
 			
@@ -312,12 +360,8 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			// needed for Export CSV option in Application Right Click
 			public function exportCSV():String
 			{
-				var keys:* = getExportDataProvider();
 				// each record has a property named after the column title equal to the value in that column for the current key
-				var dataType:Class = (keys === dataGrid.dataProvider) ? null : String; 
-				var dataTableColumns:Array = columns.getObjects();
-				var generatedCSVstring:String = ColumnUtils.generateTableCSV(dataTableColumns,keys,dataType);
-				return generatedCSVstring;
+				return ColumnUtils.generateTableCSV(columns.getObjects());
 			}
 			//needed for export CSV Button click in the control panel
 			private var fr:FileReference = new FileReference();	// CSV download file reference
@@ -439,7 +483,34 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				if (changeDetected)
 					dataGrid.selectedItems = selectedItems;				
 			}
-			
+			private function updateGlobalProbeChangeLater():void
+			{
+				if (enableProbing.value == true)
+					callLater(updateGlobalProbeChange);
+			}
+
+			private function updateGlobalProbeChange():void
+			{
+				
+				if (!parent)
+				{
+					callLater(updateGlobalProbeChange);
+					return;
+				}
+				dataGrid.drawItemForced(_lastHighlighted, _selection.containsKey(_lastHighlighted), false);
+				if (_probe.keys.length > 0)
+				{
+					var key:IQualifiedKey = _probe.keys[0];
+					var keySelected:Boolean = _selection.containsKey(key);
+					dataGrid.drawItemForced(key, keySelected, true);
+					_lastHighlighted = key;
+				}
+				else
+				{
+					_lastHighlighted = null;
+				}
+				return;
+			}
 			
 			/**
 			 * Default Filter function set for Datgrid by setting its filter properties
@@ -501,7 +572,21 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 						col.visible = false;
 					}
 				}
-				dataRowKeys.source = ColumnUtils.getAllKeys(includedColumns);
+				var tempArray:Array = ColumnUtils.getAllKeys(includedColumns);
+				if( tempArray.length > maxRows.value)
+				{	
+					maxRowsLabel.text = lang('Showing first {0} out of {1} records', StandardLib.formatNumber(maxRows.value), StandardLib.formatNumber(tempArray.length));
+					tooManyRecordsIndicator.visible = true;
+					tooManyRecordsIndicator.includeInLayout = true;
+					tempArray.length = maxRows.value;
+				}
+				else
+				{
+					tooManyRecordsIndicator.visible = false;
+					tooManyRecordsIndicator.includeInLayout = false;
+				}
+					
+				dataRowKeys.source = tempArray;
 				updateGlobalSelectionChange();
 			}
 			
@@ -529,33 +614,6 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				keyTypeCombo.dataProvider = keyTypeList;				
 				keyTypeCombo.selectedItem = filterColumnsByKeyType.value || 'Show All';
 			}
-			
-			public function getExportDataProvider():*
-			{
-				for each (var column:IAttributeColumn in columns.getObjects())
-				{
-					while (!(column is IPrimitiveColumn) && column is IColumnWrapper)
-						column = (column as IColumnWrapper).getInternalColumn();
-					
-					if (column is SecondaryKeyNumColumn)
-					{
-						// dimension slider hack -- relies on previously set SecondaryKeyNumColumn.allKeysHack = true;
-						var key:IQualifiedKey;
-						var keyLookup:Dictionary = new Dictionary(true);
-						for each (column in columns.getObjects())
-							for each (key in column.keys)
-								keyLookup[key] = true;
-								
-						var keys:Array = [];
-						for (var keyObj:* in keyLookup)
-							keys.push(keyObj);
-						
-						return keys;
-					}
-				}
-				return dataGrid.dataProvider;
-			}
-			
 			
 			private function handleDataCopy(event:Event):void
 			{											
@@ -835,6 +893,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			
 			public const showColors:LinkableBoolean = registerLinkableChild(this, new LinkableBoolean(false));
 			private const DEFAULT_CELL_COLOR_FUNCTION_SCRIPT:String = "defaultCellColorFunction(column, key, cell)";
+			private const HEATMAP_CELL_COLOR_FUNCTION_SCRIPT:String = "_norm = Class('weave.utils.ColumnUtils').getNorm(column, key);\ncolorRamp.getColorFromNorm(_norm)";
 			private var _lastCellColorError:Error = null;
 			/**
 			 * This defines how cells will be colored.
@@ -941,10 +1000,12 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 
 		</mx:VBox>
 		<mx:VBox label="{lang('Advanced')}">
+
 			<mx:HBox>
 				<mx:Button label="{lang('Export Data...')}" click="saveToFileAsCSV()" />
 				<mx:CheckBox label="{lang('Export keys with data')}" creationComplete="linkBindableProperty(exportKeys, event.target, 'selected');"/>
 			</mx:HBox>
+			<mx:CheckBox id="enableProbingCheckBox" label="{lang('Enable probing.')}"/>
 			<mx:CheckBox id="showControlsCheckBox" label="{lang('Show advanced controls on panel')}"/>
 			<mx:HBox>
 				<mx:CheckBox id="showFiltersCheckBox" label="{lang('Show filter controls on panel')}"/>
@@ -972,7 +1033,9 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 							</ui:htmlText>
 						</ui:HelpComponent>
 					</mx:HBox>
-					<mx:Button label="{lang('Reset')}" click="cellColorFunction.value = DEFAULT_CELL_COLOR_FUNCTION_SCRIPT;"/>
+					<mx:Button label="{lang('Default colors')}" click="cellColorFunction.value = DEFAULT_CELL_COLOR_FUNCTION_SCRIPT;"/>
+					<mx:Button label="{lang('Heat map')}" click="cellColorFunction.value = HEATMAP_CELL_COLOR_FUNCTION_SCRIPT;"/>
+					<mx:Button label="{lang('Edit heat map colors')}" click="ControlPanel.openEditor(colorRamp)"/>
 				</mx:VBox>
 				<mx:TextArea id="cellColorFunctionEditor" width="100%" height="100%" minHeight="48"
 							 creationComplete="linkBindableProperty(cellColorFunction, event.target, 'text', 500);"/>

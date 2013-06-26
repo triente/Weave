@@ -24,8 +24,8 @@ package weave.utils
 	import mx.utils.ObjectUtil;
 	
 	import weave.api.WeaveAPI;
-	import weave.api.core.ILinkableObject;
 	import weave.api.getCallbackCollection;
+	import weave.api.core.ILinkableObject;
 	
 	/**
 	 * Asynchronous merge sort.
@@ -35,10 +35,6 @@ package weave.utils
 	public class AsyncSort implements ILinkableObject
 	{
 		public static var debug:Boolean = false;
-		
-		public function AsyncSort():void
-		{
-		}
 		
 		private static var _immediateSorter:AsyncSort; // used by sortImmediately()
 		
@@ -50,11 +46,11 @@ package weave.utils
 		public static function sortImmediately(array:*, compareFunction:Function = null):void
 		{
 			if (!_immediateSorter)
+			{
 				_immediateSorter = new AsyncSort();
-			
-			_immediateSorter._immediately = true;
+				_immediateSorter._immediately = true;
+			}
 			_immediateSorter.beginSort(array, compareFunction);
-			_immediateSorter._immediately = false;
 		}
 		
 		/**
@@ -90,6 +86,10 @@ package weave.utils
 			if (a is Date && b is Date)
 				return ObjectUtil.dateCompare(a as Date, b as Date);
 			return 1; // not equal
+		}
+		
+		public function AsyncSort():void
+		{
 		}
 		
 		/**
@@ -137,6 +137,8 @@ package weave.utils
 			destination.length = length;
 			
 			subArraySize = 1;
+			iLeft = 0;
+			iRight = 0;
 			middle = 0;
 			end = 0;
 			elapsed = 0;
@@ -201,21 +203,7 @@ package weave.utils
 			
 			// if one sub-array includes the entire array, we're done
 			if (subArraySize >= length)
-			{
-				// source array is completely sorted
-				if (source != original) // if source isn't the original
-				{
-					// copy the sorted values to the original
-					for (var i:int = length - 1; i >= 0; i--)
-						original[i] = source[i];
-				}
-				
-				// clean up so the "get result()" function knows we're done
-				source = null;
-				destination = null;
-				
 				return 1; // done
-			}
 			
 			//TODO: improve progress calculation
 			return subArraySize / length; // not exactly accurate, but returns a number < 1
@@ -223,17 +211,31 @@ package weave.utils
 		
 		private function done():void
 		{
+			// source array is completely sorted
+			if (source != original) // if source isn't the original
+			{
+				// copy the sorted values to the original
+				var i:int = length;
+				while (i--)
+					original[i] = source[i];
+			}
+			
+			// clean up so the "get result()" function knows we're done
+			source = null;
+			destination = null;
+			
 			if (debug && elapsed > 0)
 				debugTrace(this,result.length,'in',elapsed/1000,'seconds');
 			
-			getCallbackCollection(this).triggerCallbacks();
+			if (!_immediately)
+				getCallbackCollection(this).triggerCallbacks();
 		}
 		
 		/*************
 		 ** Testing **
 		 *************/
 		
-		//test(true); // Class('weave.utils.AsyncSort').test(false)
+		//test(false); // Class('weave.utils.AsyncSort').test(false)
 		/*
 			Array.sort 50 numbers; 0.002 seconds; 487 comparisons
 			Merge Sort 50 numbers; 0.001 seconds; 208 comparisons
@@ -250,7 +252,7 @@ package weave.utils
 		*/
 		public static function test(useDefaultSort:Boolean):void
 		{
-			for each (var n:uint in [0,1,50,3000,6000,12000,25000,50000])
+			for each (var n:uint in [0,1,2,3,4,5,50,3000,6000,12000,25000,50000])
 			{
 				var array:Array = [];
 				for (var i:int = 0; i < n; i++)

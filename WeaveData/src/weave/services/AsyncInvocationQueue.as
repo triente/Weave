@@ -21,24 +21,69 @@ package weave.services
 {
 	import flash.events.Event;
 	
+	import mx.rpc.events.ResultEvent;
+	
 	import weave.api.WeaveAPI;
+	import weave.api.core.IDisposableObject;
+	import weave.api.core.ILinkableObjectWithBusyStatus;
+	import weave.api.objectWasDisposed;
 	import weave.api.reportError;
 	
 	/**
 	 * this class contains functions that handle a queue of remote procedure calls
 	 * 
-	 * @author abaumann
 	 * @author adufilie
 	 */
-	public class AsyncInvocationQueue
+	public class AsyncInvocationQueue implements ILinkableObjectWithBusyStatus, IDisposableObject
 	{
-		public function AsyncInvocationQueue()
+		public static var debug:Boolean = false;
+		
+		/**
+		 * @param paused When set to true, no queries will be executed until begin() is called.
+		 */
+		public function AsyncInvocationQueue(paused:Boolean = false)
 		{
+			_paused = paused;
+		}
+		
+		public function isBusy():Boolean
+		{
+			assertQueueValid();
+			return _downloadQueue.length > 0;
+		}
+		
+		public function dispose():void
+		{
+			assertQueueValid();
+			_downloadQueue.length = 0;
+		}
+		
+		private var _paused:Boolean = false;
+		
+		/**
+		 * If the 'paused' constructor parameter was set to true, use this function to start invoking queued queries.
+		 */		
+		public function begin():void
+		{
+			assertQueueValid();
+			
+			if (_paused)
+			{
+				_paused = false;
+				
+				for each (var query:DelayedAsyncInvocation in _downloadQueue)
+					WeaveAPI.ProgressIndicator.addTask(query);
+				
+				if (_downloadQueue.length)
+					performQuery(_downloadQueue[0]);
+			}
 		}
 
 		// interface to add a query to the download queue. 
 		public function addToQueue(query:DelayedAsyncInvocation):void
 		{
+			assertQueueValid();
+			
 			//trace("addToQueue",query);
 			
 			// if this query has already been queued, then do not queue it again
@@ -48,11 +93,29 @@ package weave.services
 				return;
 			}
 			
-			WeaveAPI.ProgressIndicator.addTask(query);
+			if (!_paused)
+				WeaveAPI.ProgressIndicator.addTask(query);
+			
+			if (debug)
+			{
+				addAsyncResponder(
+					query,
+					function(event:ResultEvent, token:Object = null):void
+					{
+						weaveTrace('Query returned: ' + query);
+						//weaveTrace('Query returned: ' + query, ObjectUtil.toString(event.result));
+					},
+					function(..._):void
+					{
+						weaveTrace('Query failed: ' + query);
+					}
+				);
+			}
+
 			
 			_downloadQueue.push(query);
 			
-			if(_downloadQueue.length == 1)
+			if (!_paused && _downloadQueue.length == 1)
 			{
 				//trace("downloading immediately", query);
 				performQuery(query);
@@ -69,10 +132,15 @@ package weave.services
 		// perform a query in the queue
 		protected function performQuery(query:DelayedAsyncInvocation):void
 		{
+			assertQueueValid();
+			
 			//trace("performQuery (timeout = "+query.webService.requestTimeout+")",query.toString());
-			query.addAsyncResponder(handleQueryResultOrFault, handleQueryResultOrFault, query);
+			addAsyncResponder(query, handleQueryResultOrFault, handleQueryResultOrFault, query);
 			
 			//URLRequestUtils.reportProgress = false;
+			
+			if (debug)
+				weaveTrace('Query sent: ' + query);
 			
 			query.invoke();
 			
@@ -82,6 +150,9 @@ package weave.services
 		// This function gets called when a query has been downloaded.  It will download the next query if available
 		protected function handleQueryResultOrFault(event:Event, token:Object = null):void
 		{
+			if (objectWasDisposed(this))
+				return;
+			
 			var query:DelayedAsyncInvocation = token as DelayedAsyncInvocation;
 			WeaveAPI.ProgressIndicator.removeTask(query);
 			
@@ -111,6 +182,8 @@ package weave.services
 		
 		public function removeQueriesOfOperationTypes(... operations):void
 		{
+			assertQueueValid();
+			
 			for each (var operation:String in operations)
 			{
 				// remove matching queries
@@ -127,6 +200,12 @@ package weave.services
 				}
 			}
 			//trace("remaining queries: " + _downloadQueue.length);
+		}
+		
+		private function assertQueueValid():void
+		{
+			if (objectWasDisposed(this))
+				throw new Error("AsyncInvocationQueue was already disposed");
 		}
 	}
 }

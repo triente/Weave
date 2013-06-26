@@ -117,17 +117,15 @@ package weave.visualization.plotters
 		 */		
 		public const legendTitleFunction:LinkableFunction = registerLinkableChild(this, new LinkableFunction('string', true, false, ['string']));
 		
-		private const _binsOrdering:Array = [];
 		private var _binToBounds:Array = [];
 		private var _binToString:Array = [];
 		public var numBins:int = 0;
 		private function createHashMaps():void
 		{
-			_binsOrdering.length = 0;
 			_binToString = [];
 			_binToBounds = [];
 			
-			var keys:Array = keySet.keys;
+			var keys:Array = filteredKeySet.keys;
 			var internalColorColumn:ColorColumn = getInternalColorColumn();
 			if (!internalColorColumn)
 				return;
@@ -139,8 +137,7 @@ package weave.visualization.plotters
 				return;
 			}
 			
-			var bins:Array = binnedColumn.getDerivedBins().getObjects();
-			numBins = bins.length;
+			numBins = binnedColumn.numberOfBins;
 			var maxCols:int = maxColumns.value;
 			if (maxCols <= 0)
 				maxCols = 1;
@@ -156,9 +153,9 @@ package weave.visualization.plotters
 				var row:int = adjustedIBin / maxCols;
 				var col:int = adjustedIBin % maxCols;
 				var b:IBounds2D = new Bounds2D();
-				_binsOrdering.push(bins[iBin]);
 				
-				LegendUtils.getBoundsFromItemID(getBackgroundDataBounds(), adjustedIBin, b, maxNumBins, maxCols, true);
+				getBackgroundDataBounds(tempBounds);
+				LegendUtils.getBoundsFromItemID(tempBounds, adjustedIBin, b, maxNumBins, maxCols, true);
 				
 				_binToBounds[iBin] = b;
 				var binString:String = binnedColumn.deriveStringFromNumber(iBin);
@@ -178,7 +175,7 @@ package weave.visualization.plotters
 		{
 			// draw the bins that have no records in them in the background
 			_drawBackground = true;
-			drawBinnedPlot(keySet.keys, dataBounds, screenBounds, destination);
+			drawBinnedPlot(filteredKeySet.keys, dataBounds, screenBounds, destination);
 			_drawBackground = false;
 		}
 
@@ -239,7 +236,7 @@ package weave.visualization.plotters
 			var internalMin:Number = stats.getMin();
 			var internalMax:Number = stats.getMax();
 			var internalColorRamp:ColorRamp = getInternalColorColumn().ramp;
-			var binCount:int = binnedColumn.getDerivedBins().getObjects().length;
+			var binCount:int = binnedColumn.numberOfBins;
 			for (var iBin:int = 0; iBin < binCount; ++iBin)
 			{
 				// if _drawBackground is set, we should draw the bins that have no records in them.
@@ -280,11 +277,12 @@ package weave.visualization.plotters
 		
 		private var XMIN:Number = 0, XMAX:Number = 1;
 		
-		override public function getDataBoundsFromRecordKey(recordKey:IQualifiedKey):Array
+		override public function getDataBoundsFromRecordKey(recordKey:IQualifiedKey, output:Array):void
 		{
+			initBoundsArray(output);
 			var internalColorColumn:ColorColumn = getInternalColorColumn();
 			if (!internalColorColumn)
-				return [ getReusableBounds() ];
+				return;
 			
 			var binnedColumn:BinnedColumn = internalColorColumn.getInternalColumn() as BinnedColumn;
 			if (binnedColumn)
@@ -292,15 +290,13 @@ package weave.visualization.plotters
 				var index:Number = binnedColumn.getValueFromKey(recordKey, Number);
 				var b:IBounds2D = _binToBounds[index];
 				if (b)
-					return [ b ];
+					(output[0] as IBounds2D).copyFrom(b);
 			}
-			
-			return [ getReusableBounds() ];
 		}
 		
-		override public function getBackgroundDataBounds():IBounds2D
+		override public function getBackgroundDataBounds(output:IBounds2D):void
 		{
-			return getReusableBounds(0, 1, 1, 0);
+			return output.setBounds(0, 1, 1, 0);
 		}
 		
 		// backwards compatibility

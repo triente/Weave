@@ -54,11 +54,10 @@ package weave.core
 		public function getObject(objectPath:Array):ILinkableObject
 		{
 			var object:ILinkableObject = _rootObject;
-			for (var i:int = 0; i < objectPath.length; i++)
+			for each (var propertyName:String in objectPath)
 			{
 				if (object == null)
 					return null;
-				var propertyName:String = objectPath[i];
 				if (object is ILinkableHashMap)
 				{
 					object = (object as ILinkableHashMap).getObject(propertyName);
@@ -114,16 +113,9 @@ package weave.core
 				{
 					var value:Object = state[name];
 					if (value is XML)
-					{
 						state[name] = (value as XML).toXMLString();
-					}
-					else if (value != null)
-					{
-						if (value.hasOwnProperty(LinkableXML.XML_STRING))
-							state[name] = value[LinkableXML.XML_STRING];
-						else
-							convertSessionStateToPrimitives(value);
-					}
+					else
+						convertSessionStateToPrimitives(value);
 				}
 			}
 		}
@@ -147,11 +139,14 @@ package weave.core
 		/**
 		 * This function will get the qualified class name of an object appearing in the session state.
 		 * @param objectPath A sequence of child names used to refer to an object appearing in the session state.
-		 * @return The qualified class name of the object referred to by objectPath.
+		 * @return The qualified class name of the object referred to by objectPath, or null if there is no object.
 		 */
 		public function getObjectType(objectPath:Array):String
 		{
-			return getQualifiedClassName(getObject(objectPath));
+			var object:ILinkableObject = getObject(objectPath);
+			if (object == null)
+				return null;
+			return getQualifiedClassName(object);
 		}
 		
 		/**
@@ -180,7 +175,7 @@ package weave.core
 		public function setChildNameOrder(hashMapPath:Array, orderedChildNames:Array):Boolean
 		{
 			var hashMap:ILinkableHashMap = getObject(hashMapPath) as ILinkableHashMap;
-			if (hashMap == null)
+			if (!hashMap || !orderedChildNames)
 				return false;
 			hashMap.setNameOrder(orderedChildNames);
 			return true;
@@ -200,6 +195,9 @@ package weave.core
 		 */
 		public function requestObject(objectPath:Array, objectType:String):Boolean
 		{
+			if (!objectPath || !objectPath.length)
+				return false;
+			objectPath = objectPath.concat();
 			var childName:String = objectPath.pop();
 			var parent:ILinkableObject = getObject(objectPath);
 			var hashMap:ILinkableHashMap = parent as ILinkableHashMap;
@@ -224,17 +222,19 @@ package weave.core
 		 */
 		public function removeObject(objectPath:Array):Boolean
 		{
+			if (!objectPath || !objectPath.length)
+				return false;
+			objectPath = objectPath.concat();
 			var childName:String = objectPath.pop();
 			var object:ILinkableObject = getObject(objectPath);
 			var hashMap:ILinkableHashMap = object as ILinkableHashMap;
 			var dynamicObject:ILinkableDynamicObject = object as ILinkableDynamicObject;
-			if (!hashMap && !dynamicObject)
-				return false;
-			
 			if (hashMap)
 				hashMap.removeObject(childName);
-			if (dynamicObject)
+			else if (dynamicObject)
 				dynamicObject.removeObject();
+			else
+				return false;
 			return true;
 		}
 		
@@ -244,9 +244,9 @@ package weave.core
 		 * @param tagName The name to use for the root XML tag that gets generated from the session state.
 		 * @return An XML serialization of the session state.
 		 */
-		public function convertSessionStateObjectToXML(sessionState:Object, tagName:String = "sessionState"):String
+		public function convertSessionStateObjectToXML(sessionState:Object, tagName:String = null):String
 		{
-			var result:XML = WeaveXMLEncoder.encode(sessionState, tagName);
+			var result:XML = WeaveXMLEncoder.encode(sessionState, tagName || "sessionState");
 			return result.toXMLString();
 		}
 
@@ -262,6 +262,8 @@ package weave.core
 			convertSessionStateToPrimitives(state); // do not allow XML objects to be returned
 			return state;
 		}
+		
+		private const _compiler:Compiler = new Compiler();
 
 		/**
 		 * @see weave.api.core.IExternalSessionStateInterface
@@ -271,21 +273,21 @@ package weave.core
 			var result:* = undefined;
 			try
 			{
-				var compiler:Compiler = new Compiler();
-				compiler.includeLibraries.apply(null, staticLibraries);
+				_compiler.includeLibraries.apply(null, staticLibraries);
+				
 				function evalExpression(...args):*
 				{
 					var thisObject:Object = getObjectFromPathOrExpressionName(scopeObjectPathOrExpressionName);
-					var compiledMethod:Function = compiler.compileToFunction(expression, variables, false, thisObject != null);
+					var compiledMethod:Function = _compiler.compileToFunction(expression, variables, null, thisObject != null);
 					return compiledMethod.apply(thisObject, args);
 				}
 				
 				if (assignExpressionName)
 					_namedExpressions[assignExpressionName] = evalExpression;
-				else
+				else if (expression)
 					result = evalExpression.apply(null, arguments);
 			}
-			catch (e:Error)
+			catch (e:*)
 			{
 				reportError(e);
 			}
@@ -317,7 +319,7 @@ package weave.core
 						ExternalInterface.marshallExceptions = true;
 						ExternalInterface.call(callback);
 					}
-					catch (e:Error)
+					catch (e:*)
 					{
 						reportError(e);
 					}
@@ -346,7 +348,7 @@ package weave.core
 					else
 						return func();
 				}
-				catch (e:Error)
+				catch (e:*)
 				{
 					reportError(e);
 				}
@@ -387,7 +389,8 @@ package weave.core
 		{
 			try
 			{
-				ExternalInterface.addCallback(functionName, closure);
+				if (ExternalInterface.available)
+					ExternalInterface.addCallback(functionName, closure);
 			}
 			catch (e:Error)
 			{

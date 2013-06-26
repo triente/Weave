@@ -19,11 +19,14 @@
 
 package weave.compiler
 {
+	import flash.utils.getQualifiedClassName;
+	
 	import mx.formatters.DateFormatter;
 	import mx.formatters.NumberFormatter;
 	import mx.utils.ObjectUtil;
 	
 	import weave.utils.AsyncSort;
+	import weave.utils.DebugTimer;
 
 	/**
 	 * This provides a set of useful static functions.
@@ -137,6 +140,24 @@ package weave.compiler
 		}
 		
 		/**
+		 * Substitutes "{n}" tokens within the specified string with the respective arguments passed in.
+		 * Same syntax as StringUtil.substitute() without the side-effects of using String.replace() with a regex.
+		 * @see String#replace()
+		 * @see mx.utils.StringUtil#substitute()
+		 */
+		public static function substitute(format:String, ...args):String
+		{
+			for (var i:int = 0; i < args.length; i++)
+			{
+				var str:String = '{' + i + '}';
+				var j:int = int.MAX_VALUE;
+				while ((j = format.lastIndexOf(str, j)) >= 0)
+					format = format.substr(0, j) + args[i] + format.substr(j + str.length);
+			}
+			return format;
+		}
+		
+		/**
 		 * @param number The Number to convert to a String.
 		 * @param base Specifies the numeric base (from 2 to 36) to use.
 		 * @param zeroPad This is the minimum number of digits to return.  The number will be padded with zeros if necessary.
@@ -246,6 +267,8 @@ package weave.compiler
 		{
 			if (value < min || value > max)
 				return NaN;
+			if (min == max)
+				return value - min; // min -> 0; NaN -> NaN
 			return (value - min) / (max - min);
 		}
 
@@ -260,6 +283,14 @@ package weave.compiler
 		 */
 		public static function scale(inputValue:Number, inputMin:Number, inputMax:Number, outputMin:Number, outputMax:Number):Number
 		{
+			if (inputMin == inputMax)
+			{
+				if (isNaN(inputValue))
+					return NaN;
+				if (inputValue > inputMax)
+					return outputMax;
+				return outputMin;
+			}
 			return outputMin + (outputMax - outputMin) * (inputValue - inputMin) / (inputMax - inputMin);
 		}
 
@@ -441,6 +472,8 @@ package weave.compiler
 		
 		public static function mean(...args):Number
 		{
+			if (args.length == 1 && args[0] is Array)
+				args = args[0];
 			var sum:Number = 0;
 			for each (var value:Number in args)
 				sum += value;
@@ -449,10 +482,24 @@ package weave.compiler
 		
 		public static function sum(...args):Number
 		{
+			if (args.length == 1 && args[0] is Array)
+				args = args[0];
 			var sum:Number = 0;
 			for each (var value:Number in args)
 				sum += value;
 			return sum;
+		}
+		
+		/**
+		 * This uses AsyncSort.sortImmediately() to sort an Array (or Vector) in place.
+		 * @param array An Array (or Vector) to sort.
+		 * @param compare A function that accepts two items and returns -1, 0, or 1.
+		 * @see weave.utils.AsyncSort#sortImmediately()
+		 * @see Array#sort()
+		 */		
+		public static function sort(array:*, compare:Function = null):void
+		{
+			AsyncSort.sortImmediately(array, compare);
 		}
 		
 		/**
@@ -572,7 +619,108 @@ package weave.compiler
 		private static const _dateFormatter:DateFormatter = new DateFormatter();
 		/**
 		 * The number of milliseconds in one minute.
-		 */		
+		 */
 		private static const _timezoneMultiplier:Number = 60000;
+		
+		/**
+		 * This compares two dynamic objects or primitive values and is much faster than ObjectUtil.compare().
+		 * @param a First dynamic object or primitive value.
+		 * @param b Second dynamic object or primitive value.
+		 * @return A value of zero if the two objects are equal, nonzero if not equal.
+		 */
+		public static function compareDynamicObjects(a:Object, b:Object):int
+		{
+			if (a === b)
+				return 0;
+			if (a == null)
+				return 1;
+			if (b == null)
+				return -1;
+			var typeA:String = typeof(a);
+			var typeB:String = typeof(b);
+			if (typeA != typeB)
+				return ObjectUtil.stringCompare(typeA, typeB);
+			if (typeA == 'boolean')
+				return ObjectUtil.numericCompare(Number(a), Number(b));
+			if (typeA == 'number')
+				return ObjectUtil.numericCompare(a as Number, b as Number);
+			if (typeA == 'string')
+				return ObjectUtil.stringCompare(a as String, b as String);
+			if (typeA != 'object')
+				return 1;
+			if (a is Date && b is Date)
+				return ObjectUtil.dateCompare(a as Date, b as Date);
+			
+			var qna:String = getQualifiedClassName(a);
+			var qnb:String = getQualifiedClassName(b);
+			
+			if (qna != qnb)
+				return ObjectUtil.stringCompare(qna, qnb);
+			
+			var p:String;
+			
+			// test if objects are dynamic
+			try
+			{
+				a[''];
+				b[''];
+			}
+			catch (e:Error)
+			{
+				return 1; // not dynamic objects
+			}
+			
+			// if there are properties in a not found in b, return -1
+			for (p in a)
+			{
+				if (!b.hasOwnProperty(p))
+					return -1;
+			}
+			for (p in b)
+			{
+				// if there are properties in b not found in a, return 1
+				if (!a.hasOwnProperty(p))
+					return 1;
+				
+				var c:int = compareDynamicObjects(a[p], b[p]);
+				if (c != 0)
+					return c;
+			}
+			
+			return 0;
+		}
+		
+		private static function testCompare_generate(base:Object, depth:int):Object
+		{
+			for (var i:int = 0; i < 10; i++)
+			{
+				var child:Object = depth > 0 ? {} : Math.random();
+				base[Math.random()] = child;
+				if (depth > 0)
+					testCompare_generate(child, depth - 1);
+			}
+			return base;
+		}
+		
+		//WeaveAPI.StageUtils.callLater(null, testCompare);
+		private static function testCompare():void
+		{
+			var i:int;
+			var orig:Object = testCompare_generate({}, 2);
+			var o1:Object = ObjectUtil.copy(orig);
+			var o2:Object = ObjectUtil.copy(o1);
+			
+			trace(ObjectUtil.toString(o1));
+			
+			DebugTimer.begin();
+			for (i = 0; i < 100; i++)
+				if (ObjectUtil.compare(o1,o2) != 0)
+					throw "ObjectUtil.compare fail";
+			DebugTimer.lap('ObjectUtil.compare');
+			for (i = 0; i < 100; i++)
+				if (compareDynamicObjects(o1,o2) != 0)
+					throw "StandardLib.compareDynamicObjects fail";
+			DebugTimer.end('StandardLib.compareDynamicObjects');
+		}
 	}
 }
