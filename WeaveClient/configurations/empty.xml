@@ -19,15 +19,6 @@
       <size>11</size>
       <underline>false</underline>
     </defaultTextFormat>
-    <disabilityAltText>Flash Object: empty instance of Weave</disabilityAltText>
-    <disabilityHashMap encoding="dynamic">
-      <LinkableString name="Line Chart of Country, %Communist"/>
-      <LinkableString name="Scatter Plot of US State FIPS Code -vs- Percent Obese (BMI >= 30) (2010)"/>
-      <LinkableString name="Scatter Plot of Percent Obese (BMI >= 30) (2010) -vs- Percent Obese (BMI >= 30) (1995)"/>
-      <LinkableString name="Line Chart of Percent Obese (BMI >= 30) (1995), Percent Obese (BMI >= 30) (2000), Percent Obese (BMI >= 30) (2005)"/>
-      <LinkableString name="Line Chart of Percent Obese (BMI >= 30) (1995), Percent Obese (BMI >= 30) (2010)"/>
-    </disabilityHashMap>
-    <disabilityLongAltText/>
     <enableAboutMenu>true</enableAboutMenu>
     <enableAddDataSource>true</enableAddDataSource>
     <enableAddNewDatasource>true</enableAddNewDatasource>

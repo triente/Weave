@@ -240,7 +240,7 @@ package weave
 		public const showEquationEditor:LinkableBoolean = new LinkableBoolean(true); // Show Equation Editor option tools menu
 		public const enableNewUserWizard:LinkableBoolean = new LinkableBoolean(true); // Add New User Wizard option tools menu
 		
-		public const disabilityAltText:LinkableString = new LinkableString(); // text used for the Alt property in html for accessibility.
+		public const disabilityAltText:LinkableString = new LinkableString("Weave Visualization."); // text used for the Alt property in html for accessibility.
 		public const disabilityHashMap:Dictionary = new Dictionary(); // Dictionary used to save each vis message at top level.          
 		
 		public const toolToggles:ILinkableHashMap = new LinkableHashMap(LinkableBoolean); // className -> LinkableBoolean

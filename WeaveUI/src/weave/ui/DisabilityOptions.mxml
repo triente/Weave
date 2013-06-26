@@ -41,7 +41,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 					 verticalAlign="top">
 				<mx:TextArea id="generalDescriptionTextInputBox" width="80%" height="30%"
 							  backgroundColor="#EEEEEE" editable="true" horizontalCenter="true"
-							  wordWrap="true"
+							  wordWrap="true" text="Weave Visualization."
 							  toolTip="Enter a general desciption of your visualizations."/>
 			</mx:VBox>
 			
@@ -51,7 +51,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 				<mx:TextArea id="detailedDescriptionTextInputBox" width="80%" height="30% "
 							  backgroundColor="#EEEEEE" enabled="true" horizontalCenter="true"
 							  wordWrap="true"
-							  editable="false" toolTip="Enter a more detailed description."/>
+							  editable="false" toolTip="Select the detailed description available from the visualizations below."/>
 				
 				<mx:Button label="Refresh Visualizations" click="updateCheckBoxes()" paddingLeft="2"
 						   paddingRight="2" toolTip="Refresh the list of visualizations"/>				
@@ -70,7 +70,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 							 label="Detailed Description"
 							 creationComplete="linkBindableProperty(useDetailedDescription, event.target, 'selected')"/>
 				<mx:TextArea id="AltTextTextArea" width="80%" height="50%"
-							 backgroundColor="#EEEEEE" editable="false"
+							 backgroundColor="#EEEEEE" editable="false" text="{generalDescriptionTextInputBox.text}"
 							 toolTip="This is the text that will be available for accessibility."/>
 			</mx:VBox>
 					
