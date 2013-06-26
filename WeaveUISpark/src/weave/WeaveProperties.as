@@ -28,6 +28,7 @@ package weave
 	import flash.net.URLRequest;
 	import flash.text.Font;
 	import flash.utils.ByteArray;
+	import flash.utils.Dictionary;
 	import flash.utils.getDefinitionByName;
 	import flash.utils.getQualifiedClassName;
 	
@@ -237,8 +238,7 @@ package weave
 		public const enableNewUserWizard:LinkableBoolean = new LinkableBoolean(true); // Add New User Wizard option tools menu
 		
 		public const disabilityAltText:LinkableString = new LinkableString(); // text used for the Alt property in html for accessibility.
-		public const disabilityHashMap:LinkableHashMap = new LinkableHashMap(); // HashMap used for disability.
-		public const disabilitySystemText:LinkableString = new LinkableString();
+		public const disabilityHashMap:Dictionary = new Dictionary(); // Dictionary used to save each vis message at top level.          
 		
 		public const toolToggles:ILinkableHashMap = new LinkableHashMap(LinkableBoolean); // className -> LinkableBoolean
 		public function getToolToggle(classDef:Class):LinkableBoolean

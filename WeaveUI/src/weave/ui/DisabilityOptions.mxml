@@ -39,18 +39,19 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 			
 			<mx:VBox width="100%" height="100%" label="General Description" horizontalAlign="left"
 					 verticalAlign="top">
-				<mx:TextInput id="generalDescriptionTextInputBox" width="80%" height="30%"
+				<mx:TextArea id="generalDescriptionTextInputBox" width="80%" height="30%"
 							  backgroundColor="#EEEEEE" editable="true" horizontalCenter="true"
-							  text="Weave Instance."
+							  wordWrap="true"
 							  toolTip="Enter a general desciption of your visualizations."/>
 			</mx:VBox>
 			
 			<mx:VBox width="100%" height="100%" label="Detailed Description" horizontalAlign="left"
 					 verticalAlign="top">
 
-				<mx:TextInput id="detailedDescriptionTextInputBox" width="80%" height="30% "
+				<mx:TextArea id="detailedDescriptionTextInputBox" width="80%" height="30% "
 							  backgroundColor="#EEEEEE" enabled="true" horizontalCenter="true"
-							  toolTip="Enter a more detailed description."/>
+							  wordWrap="true"
+							  editable="false" toolTip="Enter a more detailed description."/>
 				
 				<mx:Button label="Refresh Visualizations" click="updateCheckBoxes()" paddingLeft="2"
 						   paddingRight="2" toolTip="Refresh the list of visualizations"/>				
@@ -108,8 +109,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 							import weave.core.SessionManager;
 							import weave.editors.Disability;
 							import weave.ui.ControlPanel;
-							import weave.ui.SessionStateEditor;
-							
+							import weave.ui.SessionStateEditor;							
 							
 							private const useGeneralDescription:LinkableBoolean = new LinkableBoolean(false);
 							private const useDetailedDescription:LinkableBoolean = new LinkableBoolean(false);
@@ -121,6 +121,9 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 							private const padding:int = 5;
 							private var checkBoxArray:Array = [];
 							private var _selectedCheckBox : CheckBox;
+							private var panelMessages:Dictionary = new Dictionary();
+							private var panels:Array = Weave.root.getObjects(DraggablePanel);	
+							
 							private var _controlPanel:ControlPanel = null;
 							private var panel:DraggablePanel;
 						
@@ -142,14 +145,12 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 							{
 								super.childrenCreated();
 								
-//								linkBindableProperty(Weave.properties.disabilityAltText, _altText.value, "text");
-								//		linkBindableProperty(Weave.properties.disabilitySystemText, automaticToolDescTextBox, "text");
 								Weave.properties.disabilityAltText.addImmediateCallback(this, handleDisabilityAltTextChange);
 								useGeneralDescription.addImmediateCallback(this, handleAltText);
 								useDetailedDescription.addImmediateCallback(this, handleAltText);
 								updateCheckBoxes();	
-								addEventListener(FlexEvent.SHOW, panelRemovedEventHandler);	
-								Weave.properties.disabilityHashMap.addDisposeCallback(label, updateCheckBoxes);
+								//addEventListener(FlexEvent.SHOW, panelRemovedEventHandler);	
+								//Weave.properties.disabilityHashMap.addDisposeCallback(label, updateCheckBoxes);
 								
 								
 							}
@@ -160,40 +161,72 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 							}
 						
 							
-							protected function panelRemovedEventHandler(event:Event):void
+/* 							protected function panelRemovedEventHandler(event:Event):void
 							{	
 								var Name : String = WeaveAPI.getRegisteredImplementationDisplayName(event.currentTarget as Class) || getQualifiedClassName(event.currentTarget).split(':').pop();
 								
 								updateCheckBoxes();		
-							}
+							} */
 							
+							
+							/**
+							 * 
+							 *	This function dynamically update the checkboxes, based on open panels on stage. 
+							 * 
+							 */
 							private function updateCheckBoxes():void
 							{
 								
-								var panels:Array = [];
 								var checkBox:CheckBox   = null;
-								checkBoxArray = [];
-								panels = getWindowsOnStage();
-								
+								checkBoxArray.splice(0); // empty the checkbox array.
+								//panels = getWindowsOnStage();
 								menuToggleVBox.removeAllChildren();
 								
 								// we could use panel on stage but might not be necessary
-								for each(var panel:DraggablePanel in Weave.root.getObjects(DraggablePanel))
+								panels = Weave.root.getObjects(DraggablePanel);
+								
+								for each(panel in panels)
 								{
-									
+									delete panelMessages[panel];
 									checkBox = new CheckBox();
-									checkBox.label=panel.title;
+									checkBox.label = panel.title;
 									checkBox.toolTip = "Checking this box appends its description to the advanced description";
-									checkBoxArray.push(checkBox);
-									
+									checkBox.addEventListener(MouseEvent.CLICK, handleCheckBoxesSelection(panel))
+									menuToggleVBox.addChild(checkBox);
 								}             
 								
-								checkBoxArray.sortOn('label');
-								for each (checkBox in checkBoxArray)
-								{
-									menuToggleVBox.addChild(checkBox);
+								updateDetailedDescription();
+																
+							}
+							
+							
+							// http://stackoverflow.com/questions/13486230/to-pass-a-parameter-to-event-listener-in-as3-the-simple-way-does-it-exist
+							protected function handleCheckBoxesSelection(panel:DraggablePanel):Function {
+								return function(event:MouseEvent):void {
+									if ( event.target.selected == true ) 
+									{
+										panelMessages[panel] = true;
+										updateDetailedDescription();
+									}
+									else
+									{
+										delete panelMessages[panel];
+										updateDetailedDescription();
+									}
+									
 								}
-								
+							}
+							
+							private function updateDetailedDescription():void
+							{
+								var text:String = "";
+								for each (panel in panels)
+									if (panelMessages[panel])
+										if (Weave.properties.disabilityHashMap[panel])
+											text += Weave.properties.disabilityHashMap[panel]  + "\n";
+										else
+											text += panel.title + "\n"
+								detailedDescriptionTextInputBox.text = text;	
 							}
 							
 							protected function handleAltText():void
@@ -202,7 +235,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 								{
 									if(useDetailedDescription.value)
 									{
-										Weave.properties.disabilityAltText.value = generalDescriptionTextInputBox.text + " " + detailedDescriptionTextInputBox.text;
+										Weave.properties.disabilityAltText.value = generalDescriptionTextInputBox.text + "\n" + detailedDescriptionTextInputBox.text;
 										AltTextTextArea.text = Weave.properties.disabilityAltText.value;
 									} else
 									{
@@ -222,13 +255,13 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 									}
 								}
 							}
-					
+							
 							private function getWindowsOnStage(): Array
 							{
 								var panels:Array = Weave.root.getObjects(DraggablePanel);
 								var panelsOnStage:Array = [];
 								
-								for each (var panel:DraggablePanel in panels)
+								for each ( panel in panels)
 								{
 									if (!panel.minimized.value)
 										panelsOnStage.push(panel);

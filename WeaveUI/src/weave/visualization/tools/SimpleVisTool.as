@@ -98,7 +98,7 @@ package weave.visualization.tools
 		protected var layerListComponent:LayerListComponent;
 		protected var simpleAxisEditor:SimpleAxisEditor;
 		protected var windowSettingsEditor:WindowSettingsEditor;
-		protected var disability : Disability;
+		protected var disability : Disability; // for the disability panel.
 		
 		private var createdChildren:Boolean = false;
 		override protected function createChildren():void
