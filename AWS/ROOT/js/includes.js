@@ -14,27 +14,42 @@
 
 require.config({
 	paths : {
-		 'jquery' : 'js/jquery-1.9.1',
+		 'jquery' : 'jquery-1.9.1',
 		 'jquery-ui': 'jquery-ui-1.10.3.custom',
+		 'soyutils': 'soyutils',
+		 'closurebase': '../closure-library/closure/goog/base',
+		 'indicatorPanel': '../templates/indicatorPanel'
 	},
 	shim: {
 		'jquery.jlayout':['jlayout.border','jlayout.grid','jquery.sizes'],
 								'jquery.sizes':['jquery'],
-		'jquery-ui':['jquery']
+		'jquery-ui':['jquery'],
+		'indicatorPanel': ['closurebase', 'soyutils']
 	}
 });
 
 require(
-		[ 
-		  "text!../src/GenericPanel.html!strip", 
+		[  
 		  "jquery-ui",
-		  "jquery.jlayout" ],
-		function( html, $, jLayout) {
+		  "jquery.jlayout",
+		  "indicatorPanel"],
+		function( $, jLayout) {
 
 			// JLayout script
 			jQuery(function($) {
-				var i = $('#panel1');
-				i.append(html);
+				//var i = $('#panel1');
+				//i.append(html);
+				goog.require('goog.string.StringBuffer');
+				goog.require('aws.panels.indicatorPanel');
+				goog.require('goog.dom');
+				goog.require('goog.dom.DomHelper');
+				var data = {
+						'panelType': 'indicator',
+						 'comboOptions': ['CSVDataSource', 'Database'],
+						 'listOptions': ['option1', 'option2', 'option3']
+				};
+				soy.renderElement($("#panel1")[0],aws.panels.indicatorPanel,data);
+
 				
 				var container = $('.layout');
 
@@ -127,6 +142,8 @@ require(
 			jQuery(function($) {
 				$(document).ready(
 						function() {
+							
+							
 							
 							var countryCombobox = $('#countryCombobox');
 							countryCombobox.append($("<option/>").val('').text(
@@ -227,6 +244,8 @@ require(
 
 /*require([ "jquery", "text!../src/GenericPanel.html!strip" ], function($, html) {
 	var i = $('#panel1');
+	html = DOM element of the body + the javascript tag
 	i.append(html);
+	html
 
 });*/

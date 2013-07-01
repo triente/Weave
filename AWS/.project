@@ -3,13 +3,24 @@
 	<name>AWS</name>
 	<comment></comment>
 	<projects>
+		<project>goog.mvc</project>
 		<project>WeaveServices</project>
 		<project>WeaveServletUtils</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
-			<name>org.eclipse.vjet.eclipse.core.builder</name>
+			<name>org.eclipse.xtext.ui.shared.xtextBuilder</name>
 			<arguments>
+			</arguments>
+		</buildCommand>
+		<buildCommand>
+			<name>org.eclipse.ui.externaltools.ExternalToolBuilder</name>
+			<triggers>full,incremental,</triggers>
+			<arguments>
+				<dictionary>
+					<key>LaunchConfigHandle</key>
+					<value>&lt;project&gt;/.externalToolBuilders/org.eclipse.vjet.eclipse.core.builder.launch</value>
+				</dictionary>
 			</arguments>
 		</buildCommand>
 		<buildCommand>
@@ -23,8 +34,13 @@
 			</arguments>
 		</buildCommand>
 		<buildCommand>
-			<name>org.eclipse.wst.jsdt.core.javascriptValidator</name>
+			<name>org.eclipse.ui.externaltools.ExternalToolBuilder</name>
+			<triggers>full,incremental,</triggers>
 			<arguments>
+				<dictionary>
+					<key>LaunchConfigHandle</key>
+					<value>&lt;project&gt;/.externalToolBuilders/org.eclipse.wst.jsdt.core.javascriptValidator.launch</value>
+				</dictionary>
 			</arguments>
 		</buildCommand>
 		<buildCommand>
@@ -33,22 +49,40 @@
 			</arguments>
 		</buildCommand>
 		<buildCommand>
-			<name>org.eclipse.wst.common.project.facet.core.builder</name>
+			<name>org.eclipse.ui.externaltools.ExternalToolBuilder</name>
+			<triggers>full,incremental,</triggers>
 			<arguments>
+				<dictionary>
+					<key>LaunchConfigHandle</key>
+					<value>&lt;project&gt;/.externalToolBuilders/org.eclipse.wst.common.project.facet.core.builder.launch</value>
+				</dictionary>
 			</arguments>
 		</buildCommand>
 		<buildCommand>
-			<name>org.eclipse.wst.validation.validationbuilder</name>
+			<name>org.eclipse.ui.externaltools.ExternalToolBuilder</name>
+			<triggers>full,incremental,</triggers>
+			<arguments>
+				<dictionary>
+					<key>LaunchConfigHandle</key>
+					<value>&lt;project&gt;/.externalToolBuilders/org.eclipse.wst.validation.validationbuilder.launch</value>
+				</dictionary>
+			</arguments>
+		</buildCommand>
+		<buildCommand>
+			<name>net.vtst.ow.eclipse.js.closure.closureBuilder</name>
 			<arguments>
 			</arguments>
 		</buildCommand>
 	</buildSpec>
 	<natures>
-		<nature>org.eclipse.vjet.core.nature</nature>
+		<nature>net.vtst.ow.eclipse.js.closure.closureNature</nature>
+		<nature>org.eclipse.xtext.ui.shared.xtextNature</nature>
 		<nature>org.eclipse.wst.common.modulecore.ModuleCoreNature</nature>
+		<nature>org.eclipse.vjet.core.nature</nature>
+		<nature>net.vtst.ow.eclipse.soy.nature</nature>
 		<nature>org.eclipse.wst.jsdt.core.jsNature</nature>
-		<nature>org.eclipse.jdt.core.javanature</nature>
 		<nature>org.eclipse.jem.workbench.JavaEMFNature</nature>
+		<nature>org.eclipse.jdt.core.javanature</nature>
 		<nature>org.eclipse.wst.common.project.facet.core.nature</nature>
 	</natures>
 </projectDescription>
