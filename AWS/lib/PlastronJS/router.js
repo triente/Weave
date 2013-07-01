@@ -1,0 +1,155 @@
+/*******************************************************************************
+********************************************************************************
+**                                                                            **
+**  Copyright (c) 2012 Catch.com, Inc.                                        **
+**                                                                            **
+**  Licensed under the Apache License, Version 2.0 (the "License");           **
+**  you may not use this file except in compliance with the License.          **
+**  You may obtain a copy of the License at                                   **
+**                                                                            **
+**      http://www.apache.org/licenses/LICENSE-2.0                            **
+**                                                                            **
+**  Unless required by applicable law or agreed to in writing, software       **
+**  distributed under the License is distributed on an "AS IS" BASIS,         **
+**  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  **
+**  See the License for the specific language governing permissions and       **
+**  limitations under the License.                                            **
+**                                                                            **
+********************************************************************************
+*******************************************************************************/
+
+goog.provide('mvc.Router');
+
+goog.require('goog.History');
+goog.require('goog.array');
+goog.require('goog.events');
+goog.require('goog.history.Html5History');
+
+
+
+/**
+ * @constructor
+ * @extends {goog.events.EventTarget}
+ *
+ * @param {boolean=} opt_noFragment set to true to hide fragment when using
+ * HTML5 history.
+ * @param {string=} opt_blankPage url to a blank page - needed if HTML5 is not
+ * available and you don't want to show the fragment.
+ * @param {HTMLInputElement=} opt_input The hidden input element to be used to
+ * store the history token.  If not provided, a hidden input element will
+ * be created using document.write.
+ * @param {HTMLIFrameElement=} opt_iframe The hidden iframe that will be used by
+ * IE for pushing history state changes, or by all browsers if opt_noFragment
+ * is true. If not provided, a hidden iframe element will be created using
+ * document.write.
+ */
+mvc.Router = function(opt_noFragment, opt_blankPage, opt_input, opt_iframe) {
+  goog.base(this);
+  this.history_ = goog.history.Html5History.isSupported() ?
+      new goog.history.Html5History() :
+      new goog.History(!!(opt_blankPage && opt_noFragment), opt_blankPage,
+        opt_input, opt_iframe);
+  if (this.history_.setUseFragment)
+    this.history_.setUseFragment(!opt_noFragment);
+  goog.events.listen(this.history_, goog.history.EventType.NAVIGATE,
+      this.onChange_, false, this);
+  this.routes_ = [];
+  this.currentFragment_ = "";
+  this.history_.setEnabled(true);
+};
+goog.inherits(mvc.Router, goog.events.EventTarget);
+
+/**
+ * router event types
+ */
+mvc.Router.EventType = {
+  /*
+ * event to trigger when route is about to change.
+ */
+  ROUTE_EXPIRED: "routeExpired"
+}
+
+/**
+ * pass through the fragment for the URL
+ *
+ * @param {string} fragment to set for the history token.
+ */
+mvc.Router.prototype.navigate = function(fragment) {
+  this.history_.setToken(fragment);
+};
+
+/**
+ * returns current routed fragment
+ * @return {string} routed fragment.
+ */
+mvc.Router.prototype.getFragment = function() {
+  return this.currentFragment_;
+}
+
+
+/**
+ * define route as string or regex. /:abc/ will pass "abc" through as an
+ * argument. *abc/def will pass through all after the * as an argument
+ *
+ * @param {string|RegExp} route to watch for.
+ * @param {function(string, ...[string])} fn should take in the token and any captured strings.
+ * @param {Object=} opt_context Object in whose context the function is to be
+ *     called (the global scope if none).
+ */
+mvc.Router.prototype.route = function(route, fn, opt_context) {
+  if (goog.isString(route))
+    route = new RegExp('^' + goog.string.regExpEscape(route)
+            .replace(/\\:\w+/g, '(\\w+)')
+            .replace(/\\\*/g, '(.*)')
+            .replace(/\\\[/g, '(')
+            .replace(/\\\]/g, ')?')
+            .replace(/\\\{/g, '(?:')
+            .replace(/\\\}/g, ')?') + '$');
+  var completeRoute = {
+    route: route,
+    callback: fn,
+    context: opt_context
+  };
+  //this.runRouteIfMatches_(completeRoute, this.currentFragment_);
+  this.routes_.push(completeRoute);
+};
+
+/**
+ * run route callback if route regexp matches fragment
+ * @param {Object} route Route object with context and route regexp.
+ * @param {string} fragment URI fragment to match with.
+ */
+mvc.Router.prototype.runRouteIfMatches_ = function(route, fragment) {
+  var args = route.route.exec(fragment);
+  if (args) {
+    route.callback.apply(route.context, args);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @private
+ */
+mvc.Router.prototype.onChange_ = function() {
+  var fragment = this.history_.getToken();
+  if (fragment != this.currentFragment_) {
+    this.dispatchEvent({
+        type: mvc.Router.EventType.ROUTE_EXPIRED,
+        previous: this.currentFragment_,
+        current: fragment
+    });
+    this.currentFragment_ = fragment;
+    goog.array.find(this.routes_ || [], function(route) {
+      return this.runRouteIfMatches_(route, fragment);
+    }, this);
+  }
+};
+
+mvc.Router.prototype.checkRoutes = function() {
+  var fragment = this.history_.getToken();
+  this.currentFragment_ = fragment;
+    goog.array.find(this.routes_ || [], function(route) {
+      return this.runRouteIfMatches_(route, fragment);
+    }, this);
+}

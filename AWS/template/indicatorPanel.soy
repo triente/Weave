@@ -1,0 +1,54 @@
+{namespace aws.templates}
+
+/**
+ * @param panelID specify a UID so we can keep track of panels in controller.
+ * @param comboOptions array of options for Data Source
+ * @param listOptions  array of indicators available to this control
+ */
+{template .indicatorPanel}
+// could include the CSS here.
+
+<div id="{$panelID}" class="portlet">
+	<div class="portlet-header">
+		Indicators
+	</div>
+	<div class="portlet-content">
+		Data Source: 
+		<select id="combobox">
+		{foreach $opt in $comboOptions}
+			<option>{$opt}</option>
+		{/foreach}
+		</select>
+		{\r} // Carriage Returns
+		<input id="indicatorsInput" /> 
+		{\r}
+		Indicators: 
+		<select name="listPanel1" size="5" multiple="multiple"
+			style="width: 80%; margin: auto;">
+			{foreach $opt in $listOptions}
+				<option>{$opt}</option>
+			{/foreach}
+		</select>
+	</div>
+</div>
+{/template}
+
+/**
+ * @param grid An object containing an array of objects. Each sub-object must have
+ * 				four properties: row, col, sizex, sizey; corresponding to the intended
+ * 				position and size of the panel. 
+ */
+{template .gridster}
+
+<div class="gridster">
+        <ul>
+        {foreach $li in $grid}
+        	<li data-row="{$li.row}" data-col="{$li.col}" data-sizex="{$li.sizex}" 
+        		data-sizey="{$li.sizey}"></li>
+        {/foreach}
+        </ul>
+      </div>
+    </div>
+    
+{/template}
+

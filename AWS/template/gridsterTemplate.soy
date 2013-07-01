@@ -1,0 +1,20 @@
+{namespace aws.templates}
+
+/**
+ * @param grid An object containing an array of objects. Each sub-object must have
+ * 				four properties: row, col, sizex, sizey; corresponding to the intended
+ * 				position and size of the panel. 
+ */
+{template .gridster}
+
+<div class="gridster">
+        <ul>
+        {foreach $li in $grid}
+        	<li data-row="{$li.row}" data-col="{$li.col}" data-sizex="{$li.sizex}" 
+        		data-sizey="{$li.sizey}"></li>
+        {/foreach}
+        </ul>
+      </div>
+    </div>
+    
+{/template}

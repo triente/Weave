@@ -1,0 +1,62 @@
+/**
+ * @fileoverview Provides utility methods to render soy template.
+ */goog.provide("goog.soy");
+goog.require("goog.asserts");
+goog.require("goog.dom");
+goog.require("goog.dom.NodeType");
+goog.require("goog.dom.TagName");
+goog.require("goog.soy.data");
+/**
+ * @define {boolean} Whether to require all Soy templates to be "strict html".
+ * Soy templates that use strict autoescaping forbid noAutoescape along with
+ * many dangerous directives, and return a runtime type SanitizedContent that
+ * marks them as safe.
+ *
+ * If this flag is enabled, Soy templates will fail to render if a template
+ * returns plain text -- indicating it is a non-strict template.
+ */
+goog.soy.REQUIRE_STRICT_AUTOESCAPE = false;
+/**
+ * Renders a Soy template and then set the output string as
+ * the innerHTML of an element. It is recommended to use this helper function
+ * instead of directly setting innerHTML in your hand-written code, so that it
+ * will be easier to audit the code for cross-site scripting vulnerabilities.
+ *
+ * @param {Element} element The element whose content we are rendering into.
+ * @param {Function} template The Soy template defining the element's content.
+ * @param {Object=} opt_templateData The data for the template.
+ * @param {Object=} opt_injectedData The injected data for the template.
+ */
+goog.soy.renderElement = function(element, template, opt_templateData, opt_injectedData) {
+};
+/**
+ * Renders a Soy template into a single node or a document
+ * fragment. If the rendered HTML string represents a single node, then that
+ * node is returned (note that this is *not* a fragment, despite them name of
+ * the method). Otherwise a document fragment is returned containing the
+ * rendered nodes.
+ *
+ * @param {Function} template The Soy template defining the element's content.
+ * @param {Object=} opt_templateData The data for the template.
+ * @param {Object=} opt_injectedData The injected data for the template.
+ * @param {goog.dom.DomHelper=} opt_domHelper The DOM helper used to
+ *     create DOM nodes; defaults to {@code goog.dom.getDomHelper}.
+ * @return {!Node} The resulting node or document fragment.
+ */
+goog.soy.renderAsFragment = function(template, opt_templateData, opt_injectedData, opt_domHelper) {
+};
+/**
+ * Renders a Soy template into a single node. If the rendered
+ * HTML string represents a single node, then that node is returned. Otherwise,
+ * a DIV element is returned containing the rendered nodes.
+ *
+ * @param {Function} template The Soy template defining the element's content.
+ * @param {Object=} opt_templateData The data for the template.
+ * @param {Object=} opt_injectedData The injected data for the template.
+ * @param {goog.dom.DomHelper=} opt_domHelper The DOM helper used to
+ *     create DOM nodes; defaults to {@code goog.dom.getDomHelper}.
+ * @return {!Element} Rendered template contents, wrapped in a parent DIV
+ *     element if necessary.
+ */
+goog.soy.renderAsElement = function(template, opt_templateData, opt_injectedData, opt_domHelper) {
+};

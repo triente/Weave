@@ -1,0 +1,28 @@
+/**
+ * @fileoverview Detect Grapheme Cluster Break in a pair of codepoints. Follows
+ * Unicode 5.1 UAX#29.
+ *
+ */goog.provide("goog.i18n.GraphemeBreak");
+goog.require("goog.structs.InversionMap");
+/**
+ * Enum for all Grapheme Cluster Break properties.
+ * These enums directly corresponds to Grapheme_Cluster_Break property values
+ * mentioned in http://unicode.org/reports/tr29 table 2.
+ *
+ * CR and LF are moved to the bottom of the list because they occur only once
+ * and so good candidates to take 2 decimal digit values.
+ * @enum {number}
+ * @protected
+ */
+goog.i18n.GraphemeBreak.property = {ANY:0, CONTROL:1, EXTEND:2, PREPEND:3, SPACING_MARK:4, L:5, V:6, T:7, LV:8, LVT:9, CR:10, LF:11};
+/**
+ * There are two kinds of grapheme clusters: 1) Legacy 2)Extended. This method
+ * is to check for both using a boolean flag to switch between them.
+ * @param {number} a The code point value of the first character.
+ * @param {number} b The code point value of the second character.
+ * @param {boolean=} opt_extended If true, indicates extended grapheme cluster;
+ *     If false, indicates legacy cluster.
+ * @return {boolean} True if a & b do not form a cluster; False otherwise.
+ */
+goog.i18n.GraphemeBreak.hasGraphemeBreak = function(a, b, opt_extended) {
+};
