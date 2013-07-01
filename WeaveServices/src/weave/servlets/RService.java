@@ -46,7 +46,7 @@ public class RService extends GenericServlet
 	{
 		super.init(config);
 		docrootPath = WeaveContextParams.getInstance(config.getServletContext()).getDocrootPath();
-		uploadPath = WeaveContextParams.getInstance(config.getServletContext()).getUploadPath();
+//		uploadPath = WeaveContextParams.getInstance(config.getServletContext()).getUploadPath();
 		
 	    try {
 	    	String rServePath = WeaveContextParams.getInstance(config.getServletContext()).getRServePath();
@@ -68,7 +68,7 @@ public class RService extends GenericServlet
 	}
 
 	private String docrootPath = "";
-	private String uploadPath = "";
+//	private String uploadPath = "";
 	
 	enum ServiceType { JRI, RSERVE; }
 	private static ServiceType serviceType = ServiceType.JRI;
@@ -95,6 +95,7 @@ public class RService extends GenericServlet
 		return jriStatus;
 	}
 	
+	/*
 	//handles running canned scripts by pulling data from csv
 	public RResult[] runScriptOnCSVOnServer(String[] queryObject)throws Exception
 	{
@@ -110,8 +111,8 @@ public class RService extends GenericServlet
 		//hard coded for now
 			//String cannedScriptLocation = "C:\\Users\\Shweta\\Desktop\\brfss_RRoutine.R";
 			//String csvLocation = "C:\\Users\\Shweta\\Desktop\\SDoH2010Q.csv";
-		    String csvLocation = "/Users/franckamayou/Desktop/"+(queryObject[0]).toString();
-			String cannedScriptLocation = "/Users/franckamayou/Desktop/"+(queryObject[1]).toString();
+		    String csvLocation = "C:\\Users\\Shweta\\Desktop\\"+(queryObject[0]).toString();
+			String cannedScriptLocation = "C:\\Users\\Shweta\\Desktop\\"+(queryObject[1]).toString();
 			
 			Object[] inputValues = {cannedScriptLocation,csvLocation };
 			
@@ -143,7 +144,7 @@ public class RService extends GenericServlet
 			//String cannedSQLScriptLocation = "C:\\Users\\Shweta\\Desktop\\CDCSQLQueries.R";
 			//Object[] sqlinputValues = {cannedSQLScriptLocation, query};
 		//"con <- dbConnect(dbDriver(\"MySQL\"), user = \"root\", password = \"Tc1Sgp7nFc\", host = \"129.63.8.210\", port = 3306, dbname = \"resd\")\n"
-		    String cannedSQLScriptLocation = "/Users/franckamayou/Desktop" + (queryObject[1]).toString();
+		    String cannedSQLScriptLocation = "C:\\Users\\Shweta\\Desktop\\" + (queryObject[1]).toString();
 			
 			Object[] sqlinputValues = {cannedSQLScriptLocation, editedQuery};
 			String[] sqlinputNames = {"cannedScriptPath", "query"};
@@ -160,6 +161,7 @@ public class RService extends GenericServlet
 			
 		return sqlreturnedColumns;
 	}
+	*/
 	
 	public RResult[] runScript(String[] keys,String[] inputNames, Object[] inputValues, String[] outputNames, String script, String plotScript, boolean showIntermediateResults, boolean showWarnings, boolean useColumnAsList) throws Exception
 	{
@@ -208,27 +210,7 @@ public class RService extends GenericServlet
 		throw new RemoteException("Unable to connect to RServe & Unable to initialize REngine", exception);
 	}
 	
-	//testing for AWS java script API calls 
-	//@spurushe
-	public RResult[] runScriptTesting(String[] inputNames, Object[] inputValues, String[] outputNames, String script, String plotScript, boolean showIntermediateResults, boolean showWarnings) throws Exception
-	{
-		Exception exception = null;
-		
-			try
-			{
-				return RServiceUsingRserve.runScript( docrootPath, inputNames, inputValues, outputNames, script, plotScript, showIntermediateResults, showWarnings);
-			}
-			
-			
-			catch (RServiceUsingRserve.RserveConnectionException e)
-			{
-				e.printStackTrace();
-					exception = e;
-			}
-		
-		throw new RemoteException("Unable to connect to RServe & Unable to initialize REngine", exception);
-	}
-	//testing for AWS java script API calls 
+	
 
 	public LinearRegressionResult linearRegression(double[] dataX, double[] dataY) throws RemoteException
 	{
