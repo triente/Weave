@@ -1,0 +1,1 @@
+var weave={MyComponent:function(a,b){this.a=a;this.b=b}};weave.MyComponent.prototype.doSomething=function(a){a=["text\x3d",a," a\x3d",this.a," b\x3d",this.b].join("");console.log(a);return a};weave.utils={};weave.utils.myTestFunc=function(a,b){return(new weave.MyComponent("this is my component",a/b)).doSomething("doing something")};

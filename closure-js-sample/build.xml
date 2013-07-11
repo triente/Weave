@@ -3,7 +3,29 @@
 	<path id="librarypath">
 	    <fileset dir="${basedir}/lib" includes="**/*.jar"/>
 	</path>
+
+	<taskdef name="jscomp" classname="com.google.javascript.jscomp.ant.CompileTask"
+        classpath="${basedir}/lib/compiler.jar"/>
+		
+	<property name="srcdir" value="${basedir}/src/input"/>
 	
+	
+	
+	
+	<macrodef name="compile-soy">
+		<attribute name="file"/>
+		<sequential>
+		    
+			<java jar="${basedir}/lib/SoyToJsSrcCompiler.jar" fork="true" failonerror="true">
+		    	<arg value="--outputPathFormat"/>
+		    	<arg value="${basedir}/src/output/{file}.js"/>
+		    	<arg value="--srcs"/>
+		    	<arg value="${basedir}/src/input/{file}.soy"/>
+			</java>
+		</sequential>
+	</macrodef>
+	
+		
 	<target name="all" depends="compile-soy-to-html-using-java,compile-soy-to-js,compile-simple-js,compile-advanced-js,compile-jquery-without-externs,compile-jquery-with-externs">
 	</target>
 	<target name="compile-soy-to-html-using-java">
