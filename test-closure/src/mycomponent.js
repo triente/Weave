@@ -1,4 +1,3 @@
-goog.provide('weave');
 goog.provide('weave.MyComponent');
 
 //goog.require('goog.dom');
