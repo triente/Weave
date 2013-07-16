@@ -17,7 +17,16 @@
 		</sequential>
 	</macrodef>
 
+	<!-- http://stackoverflow.com/questions/14164325/use-wildcards-in-a-google-closure-compiler-ant-build -->
+	
 	<target name="compile">
+		
+		<path id="aws.js.fileset">
+			<fileset dir="${basedir}/src">
+				<include name="**/*.js" />
+			</fileset>
+		</path>
+		
 		<jscomp compilationLevel="simple" warning="verbose" 
 		        debug="false" output="output/myproject.js">
 			
@@ -26,12 +35,10 @@
 				<file name="myexterns.js"/>
 			</externs>
 			
-			<sources dir="${basedir}/src">
-				<file name="mycomponent.js"/>
-				<file name="utils.js"/>
-			</sources>
+			<path refid="aws.js.fileset"/>
 
 		</jscomp>
+		
 	</target>
 
 </project>
