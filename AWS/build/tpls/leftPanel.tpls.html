@@ -1,0 +1,41 @@
+<!-- Left Panel Template. 
+	We can allow quite a bit of hard-coding here for our purposes.
+	Dynamic content will just include display of the query object.
+ -->
+
+<div ng-controller="LeftPanelCtrl" class=" span3">
+	<!-- <accordion id="leftPanel" close-others="oneAtATime"> <accordion-group
+		heading='Analysis Builder' id="analysisBuilder">
+	{{QueryObjectModel}} </accordion-group> <accordion-group heading='Calculation'
+		id="calculationAccordion"> </accordion-group> <accordion-group
+		heading="Weave" id="weaveAccordion"> </accordion-group> </accordion> -->
+
+	<ul class="nav nav-tabs nav-stacked">
+		<li ng-class="{active: isActive('/analysis')}"><a
+			href="#/analysis">Analysis Builder</a></li>
+		<li ng-class="{active: isActive('/calculation')}"><a
+			href="#/calculation">Calculations</a></li>
+		<li ng-class="{active: isActive('/visualization')}"><a
+			href="#/visualization">Visualizations</a></li>
+	</ul>
+	<pre class="language-">{{QueryObjectModel()}}</pre>
+	<button onclick="saveJSON({{QueryObjectModel()}})"
+		class="btn btn-primary">Export JSON</button>
+	<br> <label>Import JSON</label> <input type="file"
+		id="queryImport" ng-submit="uploadQuery()" />
+	<button id="run" class="btn btn-primary">Run Query</button>
+	<script>
+	var importedobjectfromjson;
+		$('#run').click(function() {
+			var files = $('input');
+			var file = files[0].files[0];
+			var reader = new FileReader();
+			reader.onload = function(e) {
+				importedobjectfromjson = $.parseJSON(e.target.result);
+				var qh = new aws.QueryHandler(importedobjectfromjson);
+				qh.runQuery();
+			}
+			reader.readAsText(file);
+		});
+		</script>
+</div>
