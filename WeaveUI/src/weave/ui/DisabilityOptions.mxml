@@ -156,8 +156,11 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 							}
 							protected function handleDisabilityAltTextChange() : void
 							{
-								ExternalInterface.call("getAltText()");
-									  
+								ExternalInterface.call("function(objectID, altText) { var weave = objectID ? document.getElementById(objectID) : document.body.firstChild; weave.alt = altText;}",
+									
+									ExternalInterface.objectID,
+									Weave.properties.disabilityAltText.value
+								);									  
 							}
 						
 							

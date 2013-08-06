@@ -30,7 +30,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 <mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml" width="400" height="300"		 
 		 xmlns="weave.editors.*"
 		 xmlns:ui="weave.ui.*"
-		 label="Disability"
+		 label="Alt Text"
 		 implements="weave.api.core.ILinkableObject"
 		 enabled="{_panel != null}" xmlns:s="library://ns.adobe.com/flex/spark">
 	
@@ -59,11 +59,13 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 					 borderStyle="solid" 
 					 editable="true"  
 					 toolTip="System generated description."
-					 wordWrap="true" />
+					 wordWrap="true" 
+					 enabled="false" />
 		
 		<mx:Button label="Refresh"
 				   id="automaticDescRefreshButton" 
-				   click="updateAutomaticDescription();"/>
+				   click="updateAutomaticDescription();"
+				   enabled="false"/>
 	</mx:HBox>
 	
 	<mx:Label text="Tool description:"
@@ -84,7 +86,7 @@ along with Weave.  If not, see <http://www.gnu.org/licenses/>.
 		<mx:VBox>
 			<mx:RadioButtonGroup id="textOption" itemClick="updateToolDescription()"/>
 			<mx:RadioButton paddingLeft="10" groupName="textOption" label="Custom" id="customDescription"/>
-			<mx:RadioButton paddingLeft="10" groupName="textOption" label="Automatic" id="automaticDescription"/>
+			<mx:RadioButton paddingLeft="10" groupName="textOption" label="Automatic" id="automaticDescription" enabled="false"/>
 			
 		</mx:VBox>
 	</mx:HBox>
